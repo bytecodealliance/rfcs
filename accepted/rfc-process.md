@@ -12,17 +12,15 @@ There are two primary motivations for creating an RFC process for the Bytecode A
 
 *   **Coordination within a project**. As the BA grows, we hope and expect that projects will be actively developed by multiple organizations, rather than just by a “home” organization. While day-to-day activity can be handled through issues, pull requests, and regular meetings, having a dedicated RFC venue makes it easier to separate out discussions with far-ranging consequences that all project developers may have an interest in.
 
-
 # Proposal
 
 The design of this RFC process draws ideas from Rust’s [RFC](https://github.com/rust-lang/rfcs/) and [MCP](https://forge.rust-lang.org/compiler/mcp.html) processes, adapting to the BA and trying to keep things lightweight.
-
 
 ## Stakeholders
 
 Each core BA project has a formal set of **stakeholders**. These are individuals, organized into groups by project and/or member organization. Stakeholders can block proposals, and conversely having explicit sign-off from at least one individual within each stakeholder group is a sufficient (but not necessary) condition for immediately accepting a proposal.
 
-The process for determining core BA projects and their stakeholder set is defined by the TSC.
+The process for determining core BA projects and their stakeholder set will ultimately be defined by the Technical Steering Committee, once it is in place. Until then, the current BA Steering Committee will be responsible for creating a provisional stakeholder arrangement, as well as deciding whether to accept this RFC.
 
 ## Structure and workflow
 
@@ -88,7 +86,6 @@ This proposal tries to strike a good balance between being able to move quickly,
 The core thinking is that getting active signoff from at least one person from a different stakeholder group, together with the original motion to finalize, is sufficient evidence that an RFC has received external vetting. The additional 10 day period gives all stakeholders the opportunity to review the proposal; if there are any concerns, or even just a desire to take more time to review, any stakeholder can file an objection. And on the other hand, proposals can move even more quickly with signoff from each group.	
 
 In total, this setup allows proposals to move more quickly than either Rust’s RFC or MCP processes, due to the less stringent review requirements and ability to end FCP with enough signoff. At the same time, the default FCP waiting period and objection facility should provide stakeholders with enough notice and tools to slow things down when needed.
-
 
 ## Organizations vs individuals
 
