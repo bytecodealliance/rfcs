@@ -117,4 +117,4 @@ We could instead follow Rust’s MCP model and use Zulip streams for RFC discuss
 
 # Open questions
 
-None at this time.
+* As written, an individual stakeholder can block acceptance of an RFC indefinitely. In the Rust community, such an arrangement has sometimes caused problems, leading to a secondary process that kicks in after a waiting period, and requires an _additional_ stakeholder to approve continued blocking. Should we consider building in such a mechanism now, or add it to the process only if it becomes necessary later?
