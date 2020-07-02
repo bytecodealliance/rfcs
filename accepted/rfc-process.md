@@ -88,6 +88,10 @@ When should you open an RFC, rather than just writing code and opening a traditi
 
 The proposal above assumes the presence of tooling to manage the GitHub workflow around RFCs. The intent is to use Rust's [rfcbot](https://github.com/rust-lang/rfcbot-rs). It will need some modifications to support the proposed workflow; these can hopefully land upstream so we can share the tool with the Rust community, but otherwise the BA will maintain its own fork.
 
+## Approval of this RFC and future process-related RFCs
+
+This RFC, and any future RFCs targeting similar process-related questions, will go before the Bytecode Alliance Steering Committee (eventually replaced by the Technical Steering Committee, once that group has been formed).
+
 # Rationale and alternatives
 
 ## Stakeholder and FCP approach
