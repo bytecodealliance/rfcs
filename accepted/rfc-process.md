@@ -18,7 +18,7 @@ The design of this RFC process draws ideas from Rust’s [Request for Comment](h
 
 ## Stakeholders
 
-Each core BA project has a formal set of **stakeholders**. These are individuals, organized into groups by project and/or member organization. Stakeholders can block proposals, and conversely having explicit sign-off from at least one individual within each stakeholder group is a sufficient (but not necessary) condition for immediately accepting a proposal.
+Each core BA project has a formal set of **stakeholders**. These are individuals, organized into groups by project and/or member organization. Stakeholders can block proposals, and conversely having explicit sign-off from at least one individual within each stakeholder group is a sufficient (but not necessary) condition for immediately accepting a proposal. Stakeholders are not necessarily members of the BA.
 
 The process for determining core BA projects and their stakeholder set will ultimately be defined by the Technical Steering Committee, once it is in place. Until then, the current BA Steering Committee will be responsible for creating a provisional stakeholder arrangement, as well as deciding whether to accept this RFC.
 
