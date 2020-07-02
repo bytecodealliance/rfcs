@@ -31,7 +31,7 @@ The process for determining core BA projects and their stakeholder set will ulti
     *   A template markdown file laying out the format of RFCs, like [Rust’s](https://github.com/rust-lang/rfcs/blob/master/0000-template.md) but simplified.
     *   A subdirectory holding the text of all accepted RFCs, like [Rust’s](https://github.com/rust-lang/rfcs/tree/master/text).
 *   New RFCs are submitted via pull request, and both technical and process discussion happens via the comment thread.
-*   The RFC is tagged with a **project label**, corresponding to the BA project it targets. This tagging informs tooling about the relevant stakeholder set.
+*   The RFC is tagged with **project labels**, corresponding to the BA project(s) it targets. This tagging informs tooling about the relevant stakeholder set.
 
 ### Making a decision: merge or close
 
