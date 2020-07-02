@@ -36,6 +36,7 @@ The process for determining core BA projects and their stakeholder set will ulti
 ### Making a decision: merge or close
 
 *   When discussion has stabilized around the main points of contention, any stakeholder can make a **motion to finalize**, using a special comment syntax understood by tooling. This motion comes with a disposition: merge or close.
+    * N.B.: an RFC may be closed for reasons of timing or other project management concerns. The project team should make clear under what conditions, if any, a similar RFC would be reconsidered.
 *   In response to the motion to finalize, a bot will post a special comment with a **stakeholder checklist**. 
     *   This list includes the GitHub handle for each individual stakeholder, organized into stakeholder groups. 
     *   The individual who filed the motion to finalize is automatically checked off.
@@ -47,23 +48,29 @@ The process for determining core BA projects and their stakeholder set will ulti
 
 ## What goes into an RFC?
 
-RFCs will follow a format inspired by Rust, but significantly simplified. RFCs are markdown files containing the following sections (which will be laid out in a template file):
+In general, an RFC is a single markdown file with a number of required sections. Many RFCs should begin as _drafts_, to encourage early discussion about the approach and only a sketch of a proposal. Full RFCs contain a fleshed-out proposal and more discussion around rationale and alternatives.
 
-*   **Summary**. A ~one paragraph overview of the RFC.
-*   **Motivation**. What problem does the RFC solve?
-*   **Proposal**. The meat of the RFC.
-*   **Rationale and alternatives**. A discussion of tradeoffs: why was the proposal chosen, rather than alternatives?
-*   **Open questions**. Often an RFC is initially created with a broad proposal but some gaps that need community input to fill in.
+Template files for both draft and full RFCs will be available in the repository root.
 
 ### Draft RFCs
 
-It is encouraged to use the RFC process to discuss ideas early in the design phase, before a _full_ proposal is ready. Such RFCs should be marked as [a draft PR](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests#draft-pull-requests), and contain the following sections:
+It is encouraged to use the RFC process to discuss ideas early in the design phase, before a _full_ proposal is ready. Such RFCs should be marked as [a draft PR](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests#draft-pull-requests), and contain a markdown file with the following sections:
 
 *   **Motivation**. What problem are you ultimately hoping to solve?
 *   **Proposal sketch**. At least a short sketch of a possible approach. Beginning discussion without _any_ proposal tends to be unproductive.
 *   **Open questions**. This section is especially important for draft RFCs: it’s where you highlight the key issues you are hoping that discussion will address.
 
 RFCs cannot be merged in draft form. Before any motion to merge, the draft should be revised to include all required RFC sections, and the PR should be changed to a standard GitHub PR.
+
+### Full RFCs
+
+Full RFCs are markdown files containing the following sections (which will be laid out in a template file):
+
+*   **Summary**. A ~one paragraph overview of the RFC.
+*   **Motivation**. What problem does the RFC solve?
+*   **Proposal**. The meat of the RFC.
+*   **Rationale and alternatives**. A discussion of tradeoffs: why was the proposal chosen, rather than alternatives?
+*   **Open questions**. Often an RFC is initially created with a broad proposal but some gaps that need community input to fill in.
 
 ## What requires an RFC?
 
@@ -73,7 +80,7 @@ When should you open an RFC, rather than just writing code and opening a traditi
     *   Major architectural changes
     *   Major new features
     *   Simple changes that have significant downstream impact
-    *   Changes that could affect guarantees or level of support, e.g. removing support for a target platform
+    *   Changes that could affect guarantees or level of support, e.g. removing or adding support for a target platform
     *   Changes that could affect mission alignment, e.g. by changing properties of the security model
 *   When the work is substantial and you want to get early feedback on your approach.
 
