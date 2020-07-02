@@ -2,7 +2,7 @@
 
 # Summary
 
-As the Bytecode Alliance grows, we need more formalized ways of communicating about and reaching consensus on major changes to core projects. This document proposes to adapt ideas from Rust’s [RFC](https://github.com/rust-lang/rfcs/) and [MCP](https://forge.rust-lang.org/compiler/mcp.html) processes to the Bytecode Alliance context.
+As the Bytecode Alliance (BA) grows, we need more formalized ways of communicating about and reaching consensus on major changes to core projects. This document proposes to adapt ideas from Rust’s [RFC](https://github.com/rust-lang/rfcs/) and [MCP](https://forge.rust-lang.org/compiler/mcp.html) processes to the Bytecode Alliance context.
 
 # Motivation
 
@@ -14,7 +14,7 @@ There are two primary motivations for creating an RFC process for the Bytecode A
 
 # Proposal
 
-The design of this RFC process draws ideas from Rust’s [RFC](https://github.com/rust-lang/rfcs/) and [MCP](https://forge.rust-lang.org/compiler/mcp.html) processes, adapting to the BA and trying to keep things lightweight.
+The design of this RFC process draws ideas from Rust’s [Request for Comment](https://github.com/rust-lang/rfcs/) (RFC) and [Major Change Proposal](https://forge.rust-lang.org/compiler/mcp.html) (MCP) processes, adapting to the BA and trying to keep things lightweight.
 
 ## Stakeholders
 
