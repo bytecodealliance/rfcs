@@ -40,7 +40,7 @@ The process for determining core BA projects and their stakeholder set will ulti
 *   In response to the motion to finalize, a bot will post a special comment with a **stakeholder checklist**. 
     *   This list includes the GitHub handle for each individual stakeholder, organized into stakeholder groups. 
     *   The individual who filed the motion to finalize is automatically checked off.
-*   Once _any_ stakeholder from a _different_ group has signed off, the RFC will move into a 10 day **final comment period** (FCP), long enough to ensure that other stakeholders have at least a full business week to respond.
+*   Once _any_ stakeholder from a _different_ group has signed off, the RFC will move into a 10 calendar day **final comment period** (FCP), long enough to ensure that other stakeholders have at least a full business week to respond.
 *   During FCP, any stakeholder can raise an **objection** using a syntax understood by the bot. Doing so aborts FCP and labels the RFC as `blocked-by-stakeholder` until the objection is formally resolved (again using a special comment syntax).
 *   Finally, the RFC is automatically merged/close if either:
     *   The FCP elapses without any objections.
