@@ -77,6 +77,10 @@ When should you open an RFC, rather than just writing code and opening a traditi
     *   Changes that could affect mission alignment, e.g. by changing properties of the security model
 *   When the work is substantial and you want to get early feedback on your approach.
 
+## Tooling
+
+The proposal above assumes the presence of tooling to manage the GitHub workflow around RFCs. The intent is to use Rust's [rfcbot](https://github.com/rust-lang/rfcbot-rs). It will need some modifications to support the proposed workflow; these can hopefully land upstream so we can share the tool with the Rust community, but otherwise the BA will maintain its own fork.
+
 # Rationale and alternatives
 
 ## Stakeholder and FCP approach
