@@ -8,7 +8,7 @@ As the Bytecode Alliance (BA) grows, we need more formalized ways of communicati
 
 There are two primary motivations for creating an RFC process for the Bytecode Alliance:
 
-*   **Coordination with stakeholders**. Core BA projects have a growing set of stakeholders building on top of the projects, but not necessarily closely involved in day-to-day development. This group will only grow as the BA brings on more members. An RFC process makes it easier to communicate _possible major changes_ that stakeholders may care about, and gives them a chance to weigh in.
+*   **Coordination with stakeholders**. Core BA projects have a growing set of stakeholders using and contributing to foundational projects, often from varied organizations or teams. An RFC process makes it easier to communicate _possible major changes_ that stakeholders may care about, and gives them a chance to weigh in.
 
 *   **Coordination within a project**. As the BA grows, we hope and expect that projects will be actively developed by multiple organizations, rather than just by a “home” organization. While day-to-day activity can be handled through issues, pull requests, and regular meetings, having a dedicated RFC venue makes it easier to separate out discussions with far-ranging consequences that all project developers may have an interest in.
 
@@ -115,7 +115,7 @@ The Rust RFC process has successfully governed the development of the language f
 
 That said, a major difference in design is the notion of **stakeholders** and how they impact the decision-making process. Here we borrow some thinking from Rust’s lightweight MCP process, allowing a decision to go forward after getting buy-in from just one stakeholder within a different group -- but still requiring a waiting period to do so. A further innovation is that getting sign off from within _all_ groups immediately concludes FCP. That was not possible in the Rust community, where the set of stakeholders is unbounded.
 
-The most common complaint about the Rust RFC process is that it is, in some ways, a victim of its own success: RFC comment threads can quickly become overwhelming. While this may eventually become an issue for the BA as well, we have some additional recourse: we have a clear membership model which will allow us to prioritize concerns from member organizations, and take action when individuals outside of any organization overwhelm comment threads.
+A common complaint about the Rust RFC process is that it is, in some ways, a victim of its own success: RFC comment threads can quickly become overwhelming. While this may eventually become an issue for the BA as well, we have some additional recourse in this proposal: we have a clear stakeholder model which will allow us to prioritize concerns from stakeholders, and take action when individuals who are not formal stakeholders overwhelm comment threads.
 
 We could instead follow Rust’s MCP model and use Zulip streams for RFC discussion. However, that introduces a more complex workflow (spanning multiple systems) and leaves a less permanent and less accessible record of discussion.
 
