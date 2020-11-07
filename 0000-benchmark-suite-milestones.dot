@@ -1,0 +1,88 @@
+digraph {
+    rankdir = "LR";
+
+    {
+        rank = same;
+        initial_runner [label = "Initial Runner"];
+        initial_candidates [label = "Initial Benchmark Program Candidates"];
+        initial_analysis [label = "Initial Results Analysis w/ Significance Testing"];
+    }
+
+    {
+        rank = same;
+        mvp [shape = "rectangle", label = "MVP"];
+    }
+    initial_runner -> mvp;
+    initial_candidates -> mvp;
+    initial_analysis -> mvp;
+
+    {
+        rank = same;
+        shuffling_allocator [label = "Shuffling Allocator"];
+        stack_padding [label = "Cranelift Stack Padding"];
+        random_env_vars [label = "Randomizing Environment Variables"];
+        shuffling_linker [label = "Shuffling Linker"];
+        random_exec_order [label = "Randomizing Execution Order"];
+    }
+    initial_runner -> random_env_vars;
+    initial_runner -> random_exec_order;
+
+    shuffling_allocator -> measurement_bias_mitigated;
+    stack_padding -> measurement_bias_mitigated;
+    random_env_vars -> measurement_bias_mitigated;
+    shuffling_linker -> measurement_bias_mitigated;
+    random_exec_order -> measurement_bias_mitigated;
+
+    {
+        // rank = same;
+        // sig_test [label = "Tests of Signficance"];
+        effect_size [label = "Effect Size Confidence Intervals"];
+    }
+    // initial_analysis -> sig_test;
+    // sig_test -> effect_size;
+    initial_analysis -> effect_size;
+
+    {
+        rank = same;
+        more_candidates [label = "More Benchmark Candidates"];
+        metrics_instrumenter [label = "Candidate Metrics Instrumentation"];
+        pca_analysis [label = "Principal Component Analysis"];
+    }
+    initial_candidates -> more_candidates;
+
+    more_candidates -> representative_and_diverse_corpus;
+    metrics_instrumenter -> representative_and_diverse_corpus;
+    pca_analysis -> representative_and_diverse_corpus;
+
+    effect_size -> sound_analysis;
+
+    {
+        rank = same;
+        github_action [label = "GitHub Action Bot for Testing PRs"];
+        regression_tester [label = "Automatic Regression Detector"];
+    }
+    initial_runner -> github_action;
+    initial_runner -> regression_tester;
+    initial_analysis -> regression_tester;
+
+    github_action -> dx;
+    regression_tester -> dx;
+
+    {
+        rank = same;
+        measurement_bias_mitigated [shape = "rectangle", label = "Measurement Bias Mitigated"];
+        representative_and_diverse_corpus [shape = "rectangle", label = "Representative and Diverse Corpus"];
+        sound_analysis [shape = "rectangle", label = "Statistically Sound and Rigorous Analysis"];
+        dx [shape = "rectangle", label = "Excellent Developer Experience"];
+    }
+
+    {
+        rank = same;
+        benchmark_suite_complete [shape = "rectangle", label = "Benchmark Suite Complete"];
+    }
+
+    measurement_bias_mitigated -> benchmark_suite_complete;
+    dx -> benchmark_suite_complete;
+    sound_analysis -> benchmark_suite_complete;
+    representative_and_diverse_corpus -> benchmark_suite_complete;
+}
