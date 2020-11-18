@@ -225,9 +225,11 @@ which we harvest left-hand sides for offline superoptimization.
 * Candidate programs should only import WASI functions. They should not depend
   on any other non-standard imports, hooks, or runtime environment.
 
-* Candidate programs must be open source. This makes distributing the benchmark
-  easy, allows us to rebuild Wasm binaries as new versions are released, and
-  lets us do source-level analysis of benchmark programs when necessary.
+* Candidate programs must be open source under a license that allows
+  redistributing, modifying and redistributing modified versions. This makes
+  distributing the benchmark easy, allows us to rebuild Wasm binaries as new
+  versions are released, and lets us do source-level analysis of benchmark
+  programs when necessary.
 
 * Repeated executions of a candidate program must yield independent samples
   (ignoring priming Wasmtime's code cache). If the execution times keep taking
