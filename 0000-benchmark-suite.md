@@ -569,7 +569,7 @@ finishing with **measurement bias mitigations**.
 <!-- What other designs have been considered and what is the rationale for chosing -->
 <!-- the one proposed? -->
 
-## Why not reuse existing an existing benchmark suite?
+## Why not reuse an existing benchmark suite?
 
 There are a handful existing WebAssembly benchmark suites:
 
