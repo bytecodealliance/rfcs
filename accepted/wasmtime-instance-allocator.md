@@ -1,0 +1,431 @@
+# Summary
+[summary]: #summary
+ 
+This proposal adds an *instance allocator* abstraction to the Wasmtime runtime that will allow for custom allocation of instances and related data such as WebAssembly memories and tables.
+
+In addition to this abstraction, this proposal will outline an implementation of a *pooling instance allocator* that will manage a pool of available instances, memories, and tables that are allocated in advance.
+ 
+# Motivation
+[motivation]: #motivation
+ 
+Merging Lucet's features that enable very fast module instantiation into Wasmtime is the primary motivation for this proposal.
+
+Therefore it is important to understand how Lucet accomplishes this today.
+
+## Lucet regions
+ 
+Lucet uses a concept called a [`Region`](https://github.com/bytecodealliance/lucet/blob/main/lucet-runtime/lucet-runtime-internals/src/region.rs) that manages all of the host process address space needed to represent many concurrently running instances.
+
+This enables the very fast instance creation and destruction required by high-load services that use WebAssembly to handle requests because allocations are kept to a minimum and the memory backing an instance may be reused between instatiations from unrelated modules.
+ 
+The default Lucet `Region` implementation is `MmapRegion` that manages a fixed-capacity set of equal-sized *slots*, where each **used** slot represents a running module instance.
+ 
+A slot is a contiguous region of memory containing:
+ 
+* The instance's data (execution context, region allocation data, signal handler, etc).
+* The instance's singular memory ("heap") with guard pages.
+* The instance's execution stack used for yielding execution to the host.
+* The instance's globals as an array of 8-byte values (`v128` isn't supported).
+* The per-instance signal stack.
+ 
+As each slot needs to be of equal size, upfront limits must be set on the region to allocate the memory for each slot as a contiguous block.
+ 
+In Lucet those limits are:
+ 
+* The maximum size of an instance's memory (`heap_memory_size`).
+* The maximum size of an instance's address space (`heap_address_space_size`).
+* The size of the instance's execution stack (`stack_size`).
+* The size of the stack reserved for host calls (`hostcall_reservation`).
+* The maximum size of an instance's globals in bytes (`globals_size`).
+* The size of the instance's signal stack (`signal_stack_size`).
+ 
+Lucet doesn't support the reference types proposal that expanded the WebAssembly instruction set to include table mutation instructions as well as allowing for multiple tables.  As a result, tables are not stored in a slot; instead tables are stored in a read-only data section of the ELF executable representing a `lucetc`-compiled WebAssembly module.
+ 
+The multi-memory and bulk memory proposals are also not supported in Lucet, so an instantiated module may only have a single memory that is actively (i.e. upon instantiation) initialized.
+
+## Lucet's `uffd` feature
+
+Lucet supports a `uffd` feature that, when enabled for Linux, will offer an alternative implementation of `Region` called `UffdRegion` that uses Linux's `userfaultfd` system call to handle page faults through an entirely contiguous region of memory.
+
+This feature has several advantages over the default `MmapRegion` implementation:
+
+* `mprotect` does not need to be called to change the protection level of memory pages upon instance creation and destruction.  This reduces lock contention in the kernel's virtual memory manager and Lucet will therefore track which pages are accessible itself.
+
+* Active data segment initialization does not need to occur at module instantiation time because Lucet can handle faults to accessed pages and initialize the data per-page when accessed for the first time.
+
+The `uffd` feature is very important to high-load scenarios where system call and kernel lock contention would impact service throughput.
+
+## AOT compilation
+
+Lucet uses an ahead-of-time (AOT) compiler to translate WebAssembly modules into ELF shared objects files that can be loaded into a host process.
+
+Wasmtime does not yet support AOT compilation, although an implementation is planned.
+
+This proposal attempts to integrate Lucet's memory management features with Wasmtime today with the expectation that modules are currently just-in-time (JIT) compiled, but both will be supported in the future.
+ 
+# Proposal
+[proposal]: #proposal
+
+This proposal outlines changes to the `wasmtime_runtime` and `wasmtime` crates needed to implement a pooling instance allocator with similar functionality to Lucet's region implementation.
+
+## Changes to the `wasmtime_runtime` crate
+
+### The `InstanceAllocationRequest` struct
+
+```rust
+/// Represents a request for a new runtime instance.
+pub struct InstanceAllocationRequest<'a> {
+   /// The module being instantiated.
+   pub module: Arc<Module>,
+
+   /// The finished (JIT) functions for the module.
+   pub finished_functions: &'a PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+
+   /// The imports to use for the instantiation.
+   pub imports: Imports<'a>,
+
+   /// A callback for looking up shared signature indexes.
+   pub lookup_shared_signature: &'a dyn Fn(SignatureIndex) -> VMSharedSignatureIndex,
+
+   /// The host state to associate with the instance.
+   pub host_state: Option<Box<dyn Any>>,
+
+   /// The pointer to the VM interrupts structure to use for the instance.
+   pub interrupts: *const VMInterrupts,
+
+   /// The pointer to the reference activations table to use for the instance.
+   pub externref_activations_table: *mut VMExternRefActivationsTable,
+
+   /// The pointer to the stack map registry to use for the instance.
+   pub stack_map_registry: *mut StackMapRegistry,
+}
+```
+
+This is simply an encapsulation of the current arguments to `InstanceHandle::new` that will be passed to an instance allocator to create a new instance.
+
+### The `InstanceAllocator` trait
+
+```rust
+/// Represents a runtime instance allocator.
+///
+/// # Safety
+///
+/// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
+pub unsafe trait InstanceAllocator: Send + Sync {
+   /// Allocates an instance for the given allocation request.
+   ///
+   /// # Safety
+   ///
+   /// This method is not inherently unsafe, but care must be made to ensure
+   /// pointers passed in the allocation request outlive the returned instance.
+   unsafe fn allocate(
+      &self,
+      req: InstanceAllocationRequest,
+   ) -> Result<InstanceHandle, InstantiationError>;
+
+   /// Finishes the instantiation process started by an instance allocator.
+   ///
+   /// # Safety
+   ///
+   /// This method is only safe to call immediately after an instance has been allocated.
+   unsafe fn initialize(
+      &self,
+      handle: &InstanceHandle,
+      is_bulk_memory: bool,
+      data_initializers: Arc<[OwnedDataInitializer]>,
+   ) -> Result<(), InstantiationError>;
+
+   /// Deallocates a previously allocated instance.
+   ///
+   /// # Safety
+   ///
+   /// This function is unsafe because there are no guarantees that the given handle
+   /// is the only owner of the underlying instance to deallocate.
+   ///
+   /// Use extreme care when deallocating an instance so that there are no dangling instance pointers.
+   unsafe fn deallocate(&self, handle: &InstanceHandle);
+}
+```
+
+As `Instance` is private to the `wasmtime_runtime` crate, this trait must return `InstanceHandle` and instance allocator implementations must reside in `wasmtime_runtime`.
+
+This trait will be implemented by two types in the runtime: a default instance allocator that allocates instances based on Wasmtime's current implementation and a *pooling* instance allocator that will function more like Lucet's region implementations.
+
+The current implementation of `InstanceHandle::new` will be moved into the default instance allocator, but some common instantiation implementation will be shared between the two allocators.
+
+### The `DefaultInstanceAllocator` struct
+
+```rust
+/// Represents the default instance allocator.
+pub struct DefaultInstanceAllocator { ... }
+
+impl DefaultInstanceAllocator {
+   /// Creates a new default instance allocator.
+   pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>) -> Self { ... }
+}
+
+impl InstanceAllocator for DefaultInstanceAllocator { ... }
+```
+
+This type will be used to encapsulate the current implementation in the Wasmtime runtime for allocating instances, where allocating an instance will also allocate the related memories and tables and deallocating an instance will free the related memories and tables.
+
+For backwards compatibility, a `RuntimeMemoryCreator` can be used to control how host memory is allocated for any linear memories.
+
+### The `PoolingLimits` struct
+ 
+```rust
+/// Represents the limits of a pooling instance allocator.
+#[Copy, Clone]
+pub struct PoolingLimits {
+   /// The maximum number of instances supported by the allocator (default 1000).
+   pub instances: usize;
+ 
+   /// The maximum number of memories supported by the allocator (default 1000).
+   ///
+   /// # Notes
+   ///
+   /// Instantiating a module with `M` number of memories will count `M` times towards this limit.
+   pub memories: usize;
+ 
+   /// The maximum number of tables supported by the allocator (default 1000).
+   ///
+   /// # Notes
+   ///
+   /// Instantiating a module with `T` number of tables will count `T` times towards this limit.
+   pub tables: usize;
+
+   /// The maximum number of function types for an instance (default is 100).
+   pub instance_function_types: usize;
+ 
+   /// The maximum number of imported functions for an instance (default is 1000).
+   pub instance_imported_functions: usize;
+ 
+   /// The maximum number of imported tables for an instance (default is 0).
+   pub instance_imported_tables: usize;
+ 
+   /// The maximum number of imported memories for an instance (default is 0).
+   pub instance_imported_memories: usize;
+ 
+   /// The maximum number of imported globals for an instance (default is 0).
+   pub instance_imported_globals: usize;
+ 
+   /// The maximum number of defined functions for an instance (default is 10000).
+   pub instance_functions: usize;
+ 
+   /// The maximum number of defined tables for an instance (default is 1).
+   pub instance_tables: usize;
+ 
+   /// The maximum number of defined memories for an instance (default is 1).
+   pub instance_memories: usize;
+ 
+   /// The maximum number of defined globals for an instance (default is 10).
+   pub instance_globals: usize;
+
+   /// The maximum number of table elements for an instance (default is 10000).
+   pub instance_table_elements: usize;
+ 
+   /// The maximum size of an instance's memory in bytes (default is 1 MiB).
+   ///
+   /// A memory's maximum will be `min(memory_size, memory.maximum)`.
+   ///
+   /// The total address space reserved for an instance's memory will depend on this
+   /// value and `Tunable::static_memory_offset_guard_size`.
+   pub instance_memory_size: usize;
+}
+
+impl Default for PoolingLimits { ... }
+```
+
+The values in this structure will ultimately determine how much total address space gets reserved by the pooling instance allocator in advance.
+
+### The `PoolingAllocStrategy` enum
+
+```rust
+/// The allocation strategy to use for the pooling instance allocator.
+#[derive(Clone)]
+pub enum PoolingAllocStrategy {
+    /// Allocate from the next available instance.
+    NextAvailable,
+    /// Allocate from a random available instance.
+    Random,
+}
+```
+
+This enumeration controls how the pooling instance allocator locates free objects in the pools of instances, memories, and tables.
+
+The intention is to reduce the predictability of host process address space dedicated to instances, not unlike address space layout randomization (ASLR).
+
+This is similar to Lucet's `AllocStrategy` for regions.
+
+### The `PoolingInstanceAllocator` struct
+
+```rust
+// Represents a pooling instance allocator.
+pub struct PoolingInstanceAllocator { ... }
+
+impl PoolingInstanceAllocator {
+   /// Creates a new pooling instance allocator with the given strategy and limits.
+   pub fn new(strategy: PoolingAllocStrategy, limits: PoolingLimits) -> Result<Self>;
+}
+
+impl InstanceAllocator for PoolingInstanceAllocator { ... }
+```
+
+This type is responsible for reserving large, contiguous regions of address space that can be used to quickly allocate instances, memories, and tables in Wasmtime.
+
+The implementation will use free lists to track the available instances, memories, and tables that can be handed out by the allocator.
+
+When an instance is deallocated, it will be returned to a free list, along with the associated memories and tables.
+
+### The `userfault` feature
+
+Like Lucet's `uffd` feature, the `userfault` feature will control whether or not the pooling instance allocator will handle page faults in userspace.  The implementation will be heavily based on Lucet's.
+
+When enabled, the Linux implementation of `PoolingInstanceAllocator` will create a thread that will monitor a file descriptor that has been created with the `userfaultfd` system call.
+
+Page faults will be handled according to where they occur in the memory managed by the pooling instance allocator.
+
+Implementations for other platforms, such as Windows, might be required in the future.
+
+### The `InstanceHandle` struct
+
+The existing `InstanceHandle` structure will be modified to notify the allocator when an instance is deallocated via `InstanceHandle::dealloc`.
+
+This will enable the pooling allocator to "free" the instance by adding it (and its associated resources) to a free list rather than actually deallocating any memory.
+
+### The `Instance` struct
+
+To minimize allocations, `Instance` will be modified to use `Vec` instead of boxed slices for storing the instance's lists of memories and tables.  This will allow the pooling allocator to reuse capacity from previous instance allocations as needed.
+
+To further reduce the allocations performed when creating an `Instance`, two bit arrays will be used instead of the two `HashMap` that are storing the "not-yet-dropped" passive data and element segments.
+
+The `table.init` and `memory.init` implementations can first check the bit array for a dropped segment (i.e. bit at index is 1) and treat the segment as empty; otherwise, source the segment directly from the instance's associated `Module`.  The `data.drop` and `elem.drop` implementations therefore become a bit set operation.
+
+Additional changes are required to enable storing the instance's tables in the memory reserved by the pooling instance allocator rather than as a `Vec` per table, but this proposal considers that an implementation detail.
+
+## Changes to the `wasmtime` crate
+
+### The `InstanceAllocator` trait
+
+This trait is nearly identical to the trait in the runtime, except it only uses public Wasmtime API types:
+
+```rust
+// Represents an instance allocator.
+pub trait InstanceAllocator: Send + Sync {
+   /// Allocates an instance for the given module.
+   fn allocate(
+      &self,
+      store: &Store,
+      module: &Module,
+      imports: &[Extern],
+   ) -> Result<Instance>;
+}
+```
+
+Note that here `Instance` is the public type from the `wasmtime` crate.
+
+### The `DefaultInstanceAllocator` struct
+
+This struct is nearly identical to the struct of the same name in the runtime, except it only uses public Wasmtime API types:
+
+```rust
+// Represents the default instance allocator.
+pub struct DefaultInstanceAllocator { ... }
+
+impl DefaultInstanceAllocator {
+   /// Creates a new default instance allocator.
+   pub fn new(mem_creator: Option<Arc<dyn MemoryCreator>>) -> Self {
+}
+
+impl InstanceAllocator for DefaultInstanceAllocator { ... }
+```
+
+The implementation of this type will wrap the runtime's default instance allocator and perform the necessary translation from the public Wasmtime API types to the runtime types.
+
+### The `PoolingInstanceAllocator` struct
+
+This struct is nearly identical to the struct of the same name in the runtime, except it only uses public Wasmtime API types:
+
+```rust
+// Represents a pooling instance allocator.
+pub struct PoolingInstanceAllocator { ... }
+
+impl PoolingInstanceAllocator {
+   /// Creates a new pooling instance allocator with the given strategy and limits.
+   pub fn new(strategy: PoolingAllocStrategy, limits: PoolingLimits) -> Result<Self>;
+}
+
+impl InstanceAllocator for PoolingInstanceAllocator { ... }
+```
+
+Here `PoolingAllocStrategy` and `PoolingLimits` are re-exports from `wasmtime_runtime`.
+
+The implementation of this type will wrap the runtime's pooling instance allocator and perform the necessary translation from the public Wasmtime API types to the runtime types.
+
+### The `userfault` feature
+
+This feature will forward to the runtime's `userfault` feature to enable userfault handling in the runtime's pooling instance allocator.
+
+### The `Config` struct
+
+This proposal adds the following method to `Config`:
+
+```rust
+/// Set the instance allocator to use.
+fn with_instance_allocator(&mut self, allocator: Arc<dyn InstanceAllocator>) -> &mut Self;
+```
+
+### The `MemoryCreator` trait
+
+Today, users can implement the `MemoryCreator` trait to control how linear memories are allocated when Wasmtime instantiates a module or a user creates a host `Memory` object.
+
+To enable custom host memory management, users call `with_host_memory` on the `Config` used to create an `Engine`.  For backwards compatibility, this interface will not change.
+
+However, the `with_host_memory` implementation will change to configure the "default" allocator associated with the configuration.  The default allocator will be used for instance creation if `with_instance_allocator` is never called and for instantiation of any host objects (memories, globals, tables, and functions).
+
+This allows for host `Memory` objects to use the configured memory creator and also prevents instances created internally by Wasmtime when representing host objects from counting towards any instance allocator limits.
+
+### Re-exported types
+
+The following types will be re-exported from `wasmtime_runtime`:
+
+* `PoolingAllocStrategy`
+* `PoolingLimits`
+
+## API Example
+
+```rust
+let mut config = Config::new();
+config.with_instance_allocator(Arc::new(PoolingInstanceAllocator::new(
+   PoolingAllocStrategy::Random,
+   PoolingLimits::default(),
+)?));
+
+let engine = Engine::new(&config);
+let module = Module::new(&engine, r#"(module (func (export "run")) )"#);
+
+let store = Store::new(&engine);
+let instance = Instance::new(&store, &module, &[])?;
+
+let run = instance.get_func("run").unwrap().get0::<()>()?;
+
+run()?;
+```
+
+All instances created with `engine` will use the configured instance allocator.
+
+# Rationale and alternatives
+[rationale-and-alternatives]: #rationale-and-alternatives
+
+This proposal attempts to work within the confines of the existing `wasmtime_runtime` crate.
+
+Ideally the pooling instance allocator would be split off into its own crate, but the visibility of the `Instance` structure in the runtime prevents this.
+ 
+# Open questions
+[open-questions]: #open-questions
+
+* Should the pooling instance allocator implementation be behind a cargo feature?
+
+* The defaults for `PoolingLimits` are inspired by Lucet's default limits.  Are these sufficient for general use?
+ 
+* Will there be a need for representing these types with the other language bindings (e.g. C, C#, Golang, Python, etc.)?
