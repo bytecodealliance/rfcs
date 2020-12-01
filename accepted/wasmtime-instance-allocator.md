@@ -238,12 +238,12 @@ impl Default for PoolingLimits { ... }
 
 The values in this structure will ultimately determine how much total address space gets reserved by the pooling instance allocator in advance.
 
-### The `PoolingAllocStrategy` enum
+### The `PoolingAllocationStrategy` enum
 
 ```rust
 /// The allocation strategy to use for the pooling instance allocator.
 #[derive(Clone)]
-pub enum PoolingAllocStrategy {
+pub enum PoolingAllocationStrategy {
     /// Allocate from the next available instance.
     NextAvailable,
     /// Allocate from a random available instance.
@@ -265,7 +265,7 @@ pub struct PoolingInstanceAllocator { ... }
 
 impl PoolingInstanceAllocator {
    /// Creates a new pooling instance allocator with the given strategy and limits.
-   pub fn new(strategy: PoolingAllocStrategy, limits: PoolingLimits) -> Result<Self>;
+   pub fn new(strategy: PoolingAllocationStrategy, limits: PoolingLimits) -> Result<Self>;
 }
 
 impl InstanceAllocator for PoolingInstanceAllocator { ... }
@@ -287,12 +287,6 @@ Page faults will be handled according to where they occur in the memory managed 
 
 Implementations for other platforms, such as Windows, might be required in the future.
 
-### The `InstanceHandle` struct
-
-The existing `InstanceHandle` structure will be modified to notify the allocator when an instance is deallocated via `InstanceHandle::dealloc`.
-
-This will enable the pooling allocator to "free" the instance by adding it (and its associated resources) to a free list rather than actually deallocating any memory.
-
 ### The `Instance` struct
 
 To minimize allocations, `Instance` will be modified to use `Vec` instead of boxed slices for storing the instance's lists of memories and tables.  This will allow the pooling allocator to reuse capacity from previous instance allocations as needed.
@@ -305,75 +299,47 @@ Additional changes are required to enable storing the instance's tables in the m
 
 ## Changes to the `wasmtime` crate
 
-### The `InstanceAllocator` trait
-
-This trait is nearly identical to the trait in the runtime, except it only uses public Wasmtime API types:
-
-```rust
-// Represents an instance allocator.
-pub trait InstanceAllocator: Send + Sync {
-   /// Allocates an instance for the given module.
-   fn allocate(
-      &self,
-      store: &Store,
-      module: &Module,
-      imports: &[Extern],
-   ) -> Result<Instance>;
-}
-```
-
-Note that here `Instance` is the public type from the `wasmtime` crate.
-
-### The `DefaultInstanceAllocator` struct
-
-This struct is nearly identical to the struct of the same name in the runtime, except it only uses public Wasmtime API types:
-
-```rust
-// Represents the default instance allocator.
-pub struct DefaultInstanceAllocator { ... }
-
-impl DefaultInstanceAllocator {
-   /// Creates a new default instance allocator.
-   pub fn new(mem_creator: Option<Arc<dyn MemoryCreator>>) -> Self {
-}
-
-impl InstanceAllocator for DefaultInstanceAllocator { ... }
-```
-
-The implementation of this type will wrap the runtime's default instance allocator and perform the necessary translation from the public Wasmtime API types to the runtime types.
-
-### The `PoolingInstanceAllocator` struct
-
-This struct is nearly identical to the struct of the same name in the runtime, except it only uses public Wasmtime API types:
-
-```rust
-// Represents a pooling instance allocator.
-pub struct PoolingInstanceAllocator { ... }
-
-impl PoolingInstanceAllocator {
-   /// Creates a new pooling instance allocator with the given strategy and limits.
-   pub fn new(strategy: PoolingAllocStrategy, limits: PoolingLimits) -> Result<Self>;
-}
-
-impl InstanceAllocator for PoolingInstanceAllocator { ... }
-```
-
-Here `PoolingAllocStrategy` and `PoolingLimits` are re-exports from `wasmtime_runtime`.
-
-The implementation of this type will wrap the runtime's pooling instance allocator and perform the necessary translation from the public Wasmtime API types to the runtime types.
-
 ### The `userfault` feature
 
 This feature will forward to the runtime's `userfault` feature to enable userfault handling in the runtime's pooling instance allocator.
 
+### The `InstanceAllocationStrategy` enumeration
+```rust
+// Represents the module instance allocation strategy to use.
+#[derive(Clone)]
+pub enum InstanceAllocationStrategy {
+    /// The default Wasmtime module instance allocation strategy.
+    ///
+    /// Resources related to a module instance are allocated at instantiation time and
+    /// immediately deallocated when the `Store` referencing the instance is dropped.
+    Default,
+    /// The pooling instance allocation strategy.
+    ///
+    /// A pool of resources is created in advance and module instantiation reuses resources
+    /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
+    /// is dropped.
+    Pooling {
+        /// The allocation strategy to use for the pool's resources.
+        strategy: PoolingAllocationStrategy,
+        /// The limits to use for the pool's resources.
+        limits: PoolingLimits,
+    },
+}
+```
+
 ### The `Config` struct
 
-This proposal adds the following method to `Config`:
+This proposal adds the following method to `Config` for setting the instance allocation strategy to use:
 
 ```rust
-/// Set the instance allocator to use.
-fn with_instance_allocator(&mut self, allocator: Arc<dyn InstanceAllocator>) -> &mut Self;
+/// Sets the instance allocation strategy to use.
+pub fn with_instance_allocation_strategy(
+   &mut self,
+   strategy: InstanceAllocationStrategy,
+) -> Result<&mut Self>;
 ```
+
+All module instances created from the configuration will use the given strategy.
 
 ### The `MemoryCreator` trait
 
@@ -381,25 +347,25 @@ Today, users can implement the `MemoryCreator` trait to control how linear memor
 
 To enable custom host memory management, users call `with_host_memory` on the `Config` used to create an `Engine`.  For backwards compatibility, this interface will not change.
 
-However, the `with_host_memory` implementation will change to configure the "default" allocator associated with the configuration.  The default allocator will be used for instance creation if `with_instance_allocator` is never called and for instantiation of any host objects (memories, globals, tables, and functions).
+Only the default instance allocation strategy will use memory creator for creating linear memories for new module instances.
 
-This allows for host `Memory` objects to use the configured memory creator and also prevents instances created internally by Wasmtime when representing host objects from counting towards any instance allocator limits.
+Host `Memory` objects will continue to use the given memory creator for allocating memory.
 
 ### Re-exported types
 
 The following types will be re-exported from `wasmtime_runtime`:
 
-* `PoolingAllocStrategy`
+* `PoolingAllocationStrategy`
 * `PoolingLimits`
 
 ## API Example
 
 ```rust
 let mut config = Config::new();
-config.with_instance_allocator(Arc::new(PoolingInstanceAllocator::new(
-   PoolingAllocStrategy::Random,
-   PoolingLimits::default(),
-)?));
+config.with_instance_allocation_strategy(InstanceAllocationStrategy::Pooling {
+   strategy: PoolingAllocationStrategy::Random,
+   limits: PoolingLimits::default(),
+})?;
 
 let engine = Engine::new(&config);
 let module = Module::new(&engine, r#"(module (func (export "run")) )"#);
@@ -424,7 +390,7 @@ Ideally the pooling instance allocator would be split off into its own crate, bu
 # Open questions
 [open-questions]: #open-questions
 
-* Should the pooling instance allocator implementation be behind a cargo feature?
+* Should the pooling instance allocator implementation be behind a cargo feature or in a separate crate?
 
 * The defaults for `PoolingLimits` are inspired by Lucet's default limits.  Are these sufficient for general use?
  
