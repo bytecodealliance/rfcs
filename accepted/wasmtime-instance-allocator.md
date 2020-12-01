@@ -308,11 +308,13 @@ This feature will forward to the runtime's `userfault` feature to enable userfau
 // Represents the module instance allocation strategy to use.
 #[derive(Clone)]
 pub enum InstanceAllocationStrategy {
-    /// The default Wasmtime module instance allocation strategy.
+    /// The on-demand instance allocation strategy.
     ///
     /// Resources related to a module instance are allocated at instantiation time and
     /// immediately deallocated when the `Store` referencing the instance is dropped.
-    Default,
+    ///
+    /// This is the default allocation strategy for Wasmtime.
+    OnDemand,
     /// The pooling instance allocation strategy.
     ///
     /// A pool of resources is created in advance and module instantiation reuses resources
@@ -325,6 +327,8 @@ pub enum InstanceAllocationStrategy {
         limits: PoolingLimits,
     },
 }
+
+impl Default for InstanceAllocationStrategy { ... }
 ```
 
 ### The `Config` struct
