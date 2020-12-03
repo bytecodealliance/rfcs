@@ -175,62 +175,62 @@ For backwards compatibility, a `RuntimeMemoryCreator` can be used to control how
  
 ```rust
 /// Represents the limits of a pooling instance allocator.
-#[Copy, Clone]
+#[derive(Copy, Clone)]
 pub struct PoolingLimits {
-   /// The maximum number of instances supported by the allocator (default 1000).
-   pub instances: usize;
- 
-   /// The maximum number of memories supported by the allocator (default 1000).
-   ///
-   /// # Notes
-   ///
-   /// Instantiating a module with `M` number of memories will count `M` times towards this limit.
-   pub memories: usize;
- 
-   /// The maximum number of tables supported by the allocator (default 1000).
-   ///
-   /// # Notes
-   ///
-   /// Instantiating a module with `T` number of tables will count `T` times towards this limit.
-   pub tables: usize;
+    /// The maximum number of instances supported by the allocator (default 1000).
+    pub instances: usize,
 
-   /// The maximum number of function types for an instance (default is 100).
-   pub instance_function_types: usize;
- 
-   /// The maximum number of imported functions for an instance (default is 1000).
-   pub instance_imported_functions: usize;
- 
-   /// The maximum number of imported tables for an instance (default is 0).
-   pub instance_imported_tables: usize;
- 
-   /// The maximum number of imported memories for an instance (default is 0).
-   pub instance_imported_memories: usize;
- 
-   /// The maximum number of imported globals for an instance (default is 0).
-   pub instance_imported_globals: usize;
- 
-   /// The maximum number of defined functions for an instance (default is 10000).
-   pub instance_functions: usize;
- 
-   /// The maximum number of defined tables for an instance (default is 1).
-   pub instance_tables: usize;
- 
-   /// The maximum number of defined memories for an instance (default is 1).
-   pub instance_memories: usize;
- 
-   /// The maximum number of defined globals for an instance (default is 10).
-   pub instance_globals: usize;
+    /// The maximum number of memories supported by the allocator (default 1000).
+    ///
+    /// # Notes
+    ///
+    /// Instantiating a module with `M` number of memories will count `M` times towards this limit.
+    pub memories: usize,
 
-   /// The maximum number of table elements for an instance (default is 10000).
-   pub instance_table_elements: usize;
- 
-   /// The maximum size of an instance's memory in bytes (default is 1 MiB).
-   ///
-   /// A memory's maximum will be `min(memory_size, memory.maximum)`.
-   ///
-   /// The total address space reserved for an instance's memory will depend on this
-   /// value and `Tunable::static_memory_offset_guard_size`.
-   pub instance_memory_size: usize;
+    /// The maximum number of tables supported by the allocator (default 1000).
+    ///
+    /// # Notes
+    ///
+    /// Instantiating a module with `T` number of tables will count `T` times towards this limit.
+    pub tables: usize,
+
+    /// The maximum number of function types for an instance (default is 100).
+    pub instance_function_types: usize,
+
+    /// The maximum number of imported functions for an instance (default is 1000).
+    pub instance_imported_functions: usize,
+
+    /// The maximum number of imported tables for an instance (default is 0).
+    pub instance_imported_tables: usize,
+
+    /// The maximum number of imported memories for an instance (default is 0).
+    pub instance_imported_memories: usize,
+
+    /// The maximum number of imported globals for an instance (default is 0).
+    pub instance_imported_globals: usize,
+
+    /// The maximum number of defined functions for an instance (default is 10000).
+    pub instance_functions: usize,
+
+    /// The maximum number of defined tables for an instance (default is 1).
+    pub instance_tables: usize,
+
+    /// The maximum number of defined memories for an instance (default is 1).
+    pub instance_memories: usize,
+
+    /// The maximum number of defined globals for an instance (default is 10).
+    pub instance_globals: usize,
+
+    /// The maximum number of table elements for an instance (default is 10000).
+    pub instance_table_elements: usize,
+
+    /// The maximum size of an instance's memory in bytes (default is 1 MiB).
+    ///
+    /// A memory's maximum will be `min(memory_size, memory.maximum)`.
+    ///
+    /// The total address space reserved for an instance's memory will depend on this
+    /// value and `Tunable::static_memory_offset_guard_size`.
+    pub instance_memory_size: usize,
 }
 
 impl Default for PoolingLimits { ... }
@@ -260,7 +260,7 @@ This is similar to Lucet's `AllocStrategy` for regions.
 ### The `PoolingInstanceAllocator` struct
 
 ```rust
-// Represents a pooling instance allocator.
+/// Represents a pooling instance allocator.
 pub struct PoolingInstanceAllocator { ... }
 
 impl PoolingInstanceAllocator {
