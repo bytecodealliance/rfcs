@@ -3,7 +3,7 @@
  
 This proposal adds an *instance allocator* abstraction to the Wasmtime runtime that will allow for custom allocation of instances and related data such as WebAssembly memories and tables.
 
-In addition to this abstraction, this proposal will outline an implementation of a *pooling instance allocator* that will manage a pool of available instances, memories, and tables that are allocated in advance.
+In addition to this abstraction, this proposal will outline an implementation of a *pooling instance allocator* that will manage a pool of available instances that are allocated in advance.
  
 # Motivation
 [motivation]: #motivation
@@ -88,7 +88,7 @@ pub struct InstanceAllocationRequest<'a> {
    pub lookup_shared_signature: &'a dyn Fn(SignatureIndex) -> VMSharedSignatureIndex,
 
    /// The host state to associate with the instance.
-   pub host_state: Option<Box<dyn Any>>,
+   pub host_state: Box<dyn Any>,
 
    /// The pointer to the VM interrupts structure to use for the instance.
    pub interrupts: *const VMInterrupts,
@@ -112,6 +112,16 @@ This is simply an encapsulation of the current arguments to `InstanceHandle::new
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
 pub unsafe trait InstanceAllocator: Send + Sync {
+   /// Validates a module translation.
+   ///
+   /// This is used to ensure a module being compiled is supported by the instance allocator.
+   fn validate_module(&self, translation: &ModuleTranslation) -> Result<(), String>;
+
+   /// Adjusts the tunables prior to creation of any JIT compiler.
+   ///
+   /// This method allows the instance allocator control over tunables passed to a `wasmtime_jit::Compiler`.
+   fn adjust_tunables(&self, tunables: &mut wasmtime_environ::Tunables);
+
    /// Allocates an instance for the given allocation request.
    ///
    /// # Safety
@@ -132,7 +142,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
       &self,
       handle: &InstanceHandle,
       is_bulk_memory: bool,
-      data_initializers: Arc<[OwnedDataInitializer]>,
+      data_initializers: &Arc<[OwnedDataInitializer]>,
    ) -> Result<(), InstantiationError>;
 
    /// Deallocates a previously allocated instance.
@@ -147,96 +157,157 @@ pub unsafe trait InstanceAllocator: Send + Sync {
 }
 ```
 
-As `Instance` is private to the `wasmtime_runtime` crate, this trait must return `InstanceHandle` and instance allocator implementations must reside in `wasmtime_runtime`.
+As `Instance` is private to the `wasmtime_runtime` crate, this trait must return `InstanceHandle` and instance allocator implementations 
+must reside in `wasmtime_runtime`.
 
-This trait will be implemented by two types in the runtime: a default instance allocator that allocates instances based on Wasmtime's current implementation and a *pooling* instance allocator that will function more like Lucet's region implementations.
+This trait will be implemented by two types in the runtime: an on-demand instance allocator that allocates instances based on Wasmtime's 
+current implementation and a new *pooling* instance allocator that will function more like Lucet's region implementations.
 
-The current implementation of `InstanceHandle::new` will be moved into the default instance allocator, but some common instantiation implementation will be shared between the two allocators.
+The current implementation of `InstanceHandle::new` will be moved into the on-demand instance allocator, but some common instantiation 
+implementation will be shared between the two allocators.
 
-### The `DefaultInstanceAllocator` struct
+### The `OnDemandInstanceAllocator` struct
 
 ```rust
-/// Represents the default instance allocator.
-pub struct DefaultInstanceAllocator { ... }
+/// Represents the on-demand instance allocator.
+pub struct OnDemandInstanceAllocator { ... }
 
-impl DefaultInstanceAllocator {
+impl OnDemandInstanceAllocator {
    /// Creates a new default instance allocator.
    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>) -> Self { ... }
 }
 
-impl InstanceAllocator for DefaultInstanceAllocator { ... }
+impl InstanceAllocator for OnDemandInstanceAllocator { ... }
 ```
 
-This type will be used to encapsulate the current implementation in the Wasmtime runtime for allocating instances, where allocating an instance will also allocate the related memories and tables and deallocating an instance will free the related memories and tables.
+This type will be used to encapsulate the current implementation in the Wasmtime runtime for allocating instances, where allocating an instance will also allocate the related resources and deallocating an instance will free the related resources.
 
 For backwards compatibility, a `RuntimeMemoryCreator` can be used to control how host memory is allocated for any linear memories.
 
-### The `PoolingLimits` struct
+### The `ModuleLimits` struct
  
 ```rust
-/// Represents the limits of a pooling instance allocator.
+/// Represents the limits placed on a module for compiling with the pooling instance allocator.
 #[derive(Copy, Clone)]
-pub struct PoolingLimits {
-    /// The maximum number of instances supported by the allocator (default 1000).
-    pub instances: usize,
+pub struct ModuleLimits {
+    /// The maximum number of imported functions for a module (default is 1000).
+    pub imported_functions: usize,
 
-    /// The maximum number of memories supported by the allocator (default 1000).
-    ///
-    /// # Notes
-    ///
-    /// Instantiating a module with `M` number of memories will count `M` times towards this limit.
-    pub memories: usize,
+    /// The maximum number of imported tables for a module (default is 0).
+    pub imported_tables: usize,
 
-    /// The maximum number of tables supported by the allocator (default 1000).
-    ///
-    /// # Notes
-    ///
-    /// Instantiating a module with `T` number of tables will count `T` times towards this limit.
+    /// The maximum number of imported memories for a module (default is 0).
+    pub imported_memories: usize,
+
+    /// The maximum number of imported globals for a module (default is 0).
+    pub imported_globals: usize,
+
+    /// The maximum number of defined types for a module (default is 100).
+    pub types: usize,
+
+    /// The maximum number of defined functions for a module (default is 10000).
+    pub functions: usize,
+
+    /// The maximum number of defined tables for a module (default is 1).
     pub tables: usize,
 
-    /// The maximum number of function types for an instance (default is 100).
-    pub instance_function_types: usize,
+    /// The maximum number of defined memories for a module (default is 1).
+    pub memories: usize,
 
-    /// The maximum number of imported functions for an instance (default is 1000).
-    pub instance_imported_functions: usize,
+    /// The maximum number of defined globals for a module (default is 10).
+    pub globals: usize,
 
-    /// The maximum number of imported tables for an instance (default is 0).
-    pub instance_imported_tables: usize,
-
-    /// The maximum number of imported memories for an instance (default is 0).
-    pub instance_imported_memories: usize,
-
-    /// The maximum number of imported globals for an instance (default is 0).
-    pub instance_imported_globals: usize,
-
-    /// The maximum number of defined functions for an instance (default is 10000).
-    pub instance_functions: usize,
-
-    /// The maximum number of defined tables for an instance (default is 1).
-    pub instance_tables: usize,
-
-    /// The maximum number of defined memories for an instance (default is 1).
-    pub instance_memories: usize,
-
-    /// The maximum number of defined globals for an instance (default is 10).
-    pub instance_globals: usize,
-
-    /// The maximum number of table elements for an instance (default is 10000).
-    pub instance_table_elements: usize,
-
-    /// The maximum size of an instance's memory in bytes (default is 1 MiB).
+    /// The maximum table elements for any table defined in a module (default is 10000).
     ///
-    /// A memory's maximum will be `min(memory_size, memory.maximum)`.
+    /// If a table's minimum element limit is greater than this value, the module will
+    /// fail to compile.
     ///
-    /// The total address space reserved for an instance's memory will depend on this
-    /// value and `Tunable::static_memory_offset_guard_size`.
-    pub instance_memory_size: usize,
+    /// If a table's maximum element limit is unbounded or greater than this value,
+    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
+    pub table_elements: usize,
+
+    /// The maximum number of pages for any memory defined in a module (default is 160).
+    ///
+    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
+    ///
+    /// If a memory's minimum page limit is greater than this value, the module will
+    /// fail to compile.
+    ///
+    /// If a memory's maximum page limit is unbounded or greater than this value,
+    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
+    ///
+    /// This value cannot exceed any address space limits placed on instances.
+    pub memory_pages: usize,
 }
 
-impl Default for PoolingLimits { ... }
+impl Default for ModuleLimits {
+    fn default() -> Self {
+        // See doc comments for `ModuleLimits` for these default values
+        Self {
+            imported_functions: 1000,
+            imported_tables: 0,
+            imported_memories: 0,
+            imported_globals: 0,
+            types: 100,
+            functions: 10000,
+            tables: 1,
+            memories: 1,
+            globals: 10,
+            table_elements: 10000,
+            memory_pages: 160,
+        }
+    }
+}
 ```
 
-The values in this structure will ultimately determine how much total address space gets reserved by the pooling instance allocator in advance.
+The values in this structure are used to determine how much address space gets reserved by the pooling instance allocator.
+
+Modules will be validated against these limits after translation but before JIT compilation to ensure the module can be instantiated.
+
+### The `InstanceLimits` struct
+
+```rust
+/// Represents the limits placed on instances by the pooling instance allocator.
+#[derive(Copy, Clone)]
+pub struct InstanceLimits {
+    /// The maximum number of concurrent instances supported (default is 1000).
+    pub count: usize,
+
+    /// The maximum reserved host address space size to use for each instance in bytes.
+    ///
+    /// Note: this value has important performance ramifications.
+    ///
+    /// On 64-bit platforms, the default for this value will be 6 GiB.  A value of less than 4 GiB will
+    /// force runtime bounds checking for memory accesses and thus will negatively impact performance.
+    /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
+    /// less than (`address_space_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
+    /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
+    /// less host address space for each instance, but a memory access with an offet above 2 GiB will incur
+    /// runtime bounds checks.
+    ///
+    /// On 32-bit platforms, the default for this value will be 10 MiB. A 32-bit host has very limited address
+    /// space to reserve for a lot of concurrent instances.  As a result, runtime bounds checking will be used
+    /// for all memory accesses.  For better runtime performance, a 64-bit host is recommended.
+    pub address_space_size: usize,
+}
+
+impl Default for InstanceLimits {
+    fn default() -> Self {
+        // See doc comments for `InstanceLimits` for these default values
+        Self {
+            count: 1000,
+            #[cfg(target_pointer_width = "32")]
+            address_space_size: 0xA00000,
+            #[cfg(target_pointer_width = "64")]
+            address_space_size: 0x180000000,
+        }
+    }
+}
+```
+
+The `address_space_size` value is used to calculate the total address space needed by the pooling instance allocator.
+
+The remaining limits are enforced at module instantiation time.
 
 ### The `PoolingAllocationStrategy` enum
 
@@ -249,9 +320,15 @@ pub enum PoolingAllocationStrategy {
     /// Allocate from a random available instance.
     Random,
 }
+
+impl Default for PoolingAllocationStrategy {
+    fn default() -> Self {
+        Self::NextAvailable
+    }
+}
 ```
 
-This enumeration controls how the pooling instance allocator locates free objects in the pools of instances, memories, and tables.
+This enumeration controls how the pooling instance allocator locates free objects in the pools of instances.
 
 The intention is to reduce the predictability of host process address space dedicated to instances, not unlike address space layout randomization (ASLR).
 
@@ -265,17 +342,22 @@ pub struct PoolingInstanceAllocator { ... }
 
 impl PoolingInstanceAllocator {
    /// Creates a new pooling instance allocator with the given strategy and limits.
-   pub fn new(strategy: PoolingAllocationStrategy, limits: PoolingLimits) -> Result<Self>;
+   pub fn new(
+      strategy: PoolingAllocationStrategy,
+      module_limits: ModuleLimits,
+      instance_limits: InstanceLimits,
+   ) -> Result<Self, String> { ... }
 }
 
 impl InstanceAllocator for PoolingInstanceAllocator { ... }
 ```
 
-This type is responsible for reserving large, contiguous regions of address space that can be used to quickly allocate instances, memories, and tables in Wasmtime.
+This type is responsible for reserving large, contiguous regions of address space that can be used to quickly allocate instances in 
+Wasmtime.
 
-The implementation will use free lists to track the available instances, memories, and tables that can be handed out by the allocator.
+The implementation will use a free list to track the available instances that can be handed out by the allocator.
 
-When an instance is deallocated, it will be returned to a free list, along with the associated memories and tables.
+When an instance is deallocated, it will be returned to a free list.
 
 ### The `userfault` feature
 
@@ -321,10 +403,12 @@ pub enum InstanceAllocationStrategy {
     /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
     /// is dropped.
     Pooling {
-        /// The allocation strategy to use for the pool's resources.
+        /// The allocation strategy to use.
         strategy: PoolingAllocationStrategy,
-        /// The limits to use for the pool's resources.
-        limits: PoolingLimits,
+        /// The module limits to use.
+        module_limits: ModuleLimits,
+        /// The instance limits to use.
+        instance_limits: InstanceLimits,
     },
 }
 
@@ -359,8 +443,9 @@ Host `Memory` objects will continue to use the given memory creator for allocati
 
 The following types will be re-exported from `wasmtime_runtime`:
 
+* `ModuleLimits`
+* `InstanceLimits`
 * `PoolingAllocationStrategy`
-* `PoolingLimits`
 
 ## API Example
 
@@ -368,7 +453,8 @@ The following types will be re-exported from `wasmtime_runtime`:
 let mut config = Config::new();
 config.with_instance_allocation_strategy(InstanceAllocationStrategy::Pooling {
    strategy: PoolingAllocationStrategy::Random,
-   limits: PoolingLimits::default(),
+   module_limits: ModuleLimits::default(),
+   instance_limits: InstanceLimits::default(),
 })?;
 
 let engine = Engine::new(&config);
