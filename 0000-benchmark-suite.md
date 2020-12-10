@@ -291,10 +291,12 @@ counters (these can be recorded via `perf`, or equivalent):
 * Branch misses
 * TLB misses
 * Page faults
+* Ratio of time spent in the kernel vs. user space
 
 Depending on the counter, these can be noisy across runs, so we should take the
 mean of multiple samples. Additionally, these counters should all be normalized
-by the number of cycles it took to execute the program.
+by the number of cycles it took to execute the program (other than the ratio of
+time spent in the kernel vs. user space).
 
 ### Initial List of Potential Candidates
 
