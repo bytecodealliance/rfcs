@@ -435,6 +435,14 @@ helps us avoid some measurement bias from CPU state transitions that aren't
 constrained within the duration of process execution, like dynamic CPU
 throttling due to overheating.
 
+### Miscellaneous Mitigations
+
+* We should [set the `LD_BIND_NOW` environment
+  variable](https://github.com/bytecodealliance/rfcs/pull/3#issue comment-729934204).
+
+* We should [disable hyperthreading and
+  NUMA](https://github.com/bytecodealliance/rfcs/pull/4#issuecomment-735958404).
+
 ## Analysis
 
 The worst kind of analysis we can do is something like compare averages with and
