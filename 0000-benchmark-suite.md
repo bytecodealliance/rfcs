@@ -326,6 +326,8 @@ Here is an initial brainstorm of potential candidates benchmark programs:
   [`wasmprinter`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmparser)
   WebAssembly disassembler
 * The [Clang](https://clang.llvm.org/) C compiler
+* The `gcc-loops-wasm` benchmark program from JetStream 2 (adopted, in turn,
+  from LLVM's test suite)
 * A WebAssembly interpreter
 * Something to do with [YoWASP](https://yowasp.org/)
 * Something to do with [OpenCV](https://opencv.org/)
