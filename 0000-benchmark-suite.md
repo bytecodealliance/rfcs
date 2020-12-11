@@ -438,7 +438,7 @@ throttling due to overheating.
 ### Miscellaneous Mitigations
 
 * We should [set the `LD_BIND_NOW` environment
-  variable](https://github.com/bytecodealliance/rfcs/pull/3#issue comment-729934204).
+  variable](https://github.com/bytecodealliance/rfcs/pull/3#issuecomment-729934204).
 
 * We should [disable hyperthreading and
   NUMA](https://github.com/bytecodealliance/rfcs/pull/4#issuecomment-735958404).
