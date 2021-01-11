@@ -616,18 +616,20 @@ Finally, it is not clear that any of these suites are representative and diverse
 since, to the best of my knowledge, none used a statistical approach in their
 benchmark program selection methodology.
 
-## Why not contribute to the standard `webassembly/benchmarks` suite?
+## Why not contribute to the standard [`webassembly/benchmarks`](https://github.com/WebAssembly/benchmarks) suite?
 
-While the `webassembly/benchmarks` suite currently assumes a Web environment, or
-at least a JavaScript host, we could conceivably send pull requests upstream to
-make some portion of the benchmarks run in standalone WASI environments. But
-this is additional work on our part that ultimately does not bring additional
-benefit. Finally, in the roughly year and a half since the project started, only
-a single benchmark program has been added to the repository.
+While the [`webassembly/benchmarks`](https://github.com/WebAssembly/benchmarks)
+suite currently assumes a Web environment, or at least a JavaScript host, we
+could conceivably send pull requests upstream to make some portion of the
+benchmarks run in standalone WASI environments. But this is additional work on
+our part that ultimately does not bring additional benefit. Finally, in the
+roughly year and a half since the project started, only a single benchmark
+program has been added to the repository.
 
 > Aside: I'd like to thank Ben Titzer for collecting and sharing the references
-> pointed to in `webassembly/benchmarks`. They have been super inspiring and
-> helpful!
+> pointed to in
+> [`webassembly/benchmarks`](https://github.com/WebAssembly/benchmarks). They
+> have been super inspiring and helpful!
 
 ## Why not compile SPEC CPU to WebAssembly?
 
