@@ -519,7 +519,7 @@ engineering investment. Below is a dependency graph depicting chunks of work and
 milestones. Milestones are shown in rectangular boxes, while work chunks are
 shown in ellipses. An edge from A to B means that A blocks B.
 
-![](./0000-benchmark-suite-milestones.png)
+![](./benchmark-suite-milestones.png)
 
 Here is a short description of each milestone:
 
