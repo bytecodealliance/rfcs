@@ -282,7 +282,7 @@ pub struct InstanceLimits {
     /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
     /// less than (`address_space_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
     /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
-    /// less host address space for each instance, but a memory access with an offet above 2 GiB will incur
+    /// less host address space for each instance, but a memory access with an offset above 2 GiB will incur
     /// runtime bounds checks.
     ///
     /// On 32-bit platforms, the default for this value will be 10 MiB. A 32-bit host has very limited address
