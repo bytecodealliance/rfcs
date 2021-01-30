@@ -41,11 +41,13 @@ unreliable environments for accurate, low-noise benchmark measurements.
 
 We already have access to one AArch64 server-grade host for interactive
 development of the Cranelift ARM backend, generously [provided by
-ARM](https://github.com/WorksOnArm/cluster/issues/204). We may be able to use
-this host for running benchmarks as well, if all stakeholders agree.
-
-We will need an x86-64 host as well; the best option is likely to rent a
-low-cost dedicated host. Details of hosting choice and funding are TBD.
+ARM](https://github.com/WorksOnArm/cluster/issues/204), and have the ability to
+run benchmarking on it. We have also procured access to a dedicated x86-64
+machine. These two machines would allow us to benchmark Linux/x86-64 and
+Linux/aarch64. Another worthwhile target would be Windows/x86-64, which is
+interesting because of differing ABIs and some VM details, but we have not yet
+decided to commit resources (an additional machine) or develop specific runner
+infrastructure for this.
 
 Relevant Bytecode Alliance-affiliated engineers would then be granted access to
 these machines and maintain a benchmark-runner infrastructure as described
@@ -56,14 +58,16 @@ below.
 We will need a frontend to present the benchmarking data that this
 infrastructure collects. Johnnie Birch and Andrew Brown of Intel have developed
 a prototype web-based frontend that records and plots performance of benchmark
-suites over time; this is the most likely candidate. As long as traffic is low
-enough, we can plan to use the benchmark-runner host(s) as web hosts as well in
-order to serve this UI. Alternately, if hosting performance becomes an issue,
-we could design a static/pregenerated-page workflow wherein the runners upload
-data to a git repository and static data is served from GitHub Pages (or
-another static host).
+suites over time; this is the most likely candidate.
 
-Initially, we can populate the database for this UI with manually-initiated
+We hope to initially work out a static-file / client-side solution, which would
+allow us maximal flexibility in hosting configuration. For example, the
+benchmarking infrastructure could upload the latest data to a Git repository,
+to be served by GitHub Pages. We do not anticipate the need for a full
+database-based backend, and if data becomes large enough then we can segment
+the static data (JSON) files and download selectively.
+
+Initially, we can populate the data for this UI with manually-initiated
 benchmarking runs on the benchmarking machines.
 
 ## Step 3: Set up GitHub-integrated benchmark runner automation
@@ -90,6 +94,12 @@ would not require any GitHub API integration. We expect, though, given prior
 art in GitHub-integrated CI-like bots (such as the Rust project's bors bot),
 that the integration should not present unforeseen problems.
 
+Note that this runner infrastructure, at the macro level (repo checkout and
+command invocation), is largely orthogonal to the benchmark suite and its
+specific harness. We will likely want to design a simple in-repo configuration
+file consumed by the runner daemon that specifies what to run and in what
+environment (e.g., a Dockerfile-specified container).
+
 # Open questions
 [open-questions]: #open-questions
 
@@ -100,3 +110,23 @@ from a PR, the necessary safeguards are in place to gate on approvals.
 Potentially we should also sandbox in other ways; for example wrap the runner
 daemon in a chroot or container with limited capabilities, and cap its resource
 limits.
+
+## Availability Expectations
+
+We should set expectations that the benchmarking service may occasionally
+become unavailable due to hiccups in operational details: for example, a
+build/benchmarking server might go down or run out of disk space, or a PR might
+break a benchmark run and not be caught by CI. At least two questions arise:
+how or if such a situation blocks work from being done, and what resources
+(time / engineering) we apply to minimize it.
+
+Given that not every PR will be performance-sensitive and require benchmarking,
+such downtime should not impact progress in most cases, so it is likely to work
+well enough to start with a "best effort" policy. In other words, repairing any
+benchmark-infrastructure breakage should be done, but is lower-priority than
+other work, so as to not impose too much of a burden or require an "on-call"
+system. If a performance-sensitive PR is blocked on a need for benchmarking
+results, then we can expedite work to bring it back online. Otherwise, the
+ability to request runs on arbitrary commits should allow us to fill in a gap
+after-the-fact and reconstruct a full performance history on the `main` branch
+even if we experience some outages.
