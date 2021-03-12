@@ -63,65 +63,65 @@ preserve stability and leave options if anything goes wrong.
 
 ## Transition Criteria
 
-* *Feature-completeness*: All needed functionality must be present and
+1. *Feature-completeness*: All needed functionality must be present and
   all tests must pass. 
   
-** Status: we are largely there already. In
-   bytecodealliance/wasmtime#2718, a trial/draft PR, the default was
-   switched and all tests that are still applicable (i.e., not testing
-   specific details of the old backend) are passing. Only
-   bytecodealliance/wasmtime#2710 needs to land for the new backend to
-   be fully feature-complete.
+  -  Status: we are largely there already. In
+     bytecodealliance/wasmtime#2718, a trial/draft PR, the default was
+     switched and all tests that are still applicable (i.e., not testing
+     specific details of the old backend) are passing. Only
+     bytecodealliance/wasmtime#2710 needs to land for the new backend to
+     be fully feature-complete.
    
-*** Note: the new backend does not fully support Wasm-SIMD. However,
-    the old backend no longer does, either, after the proposal's
-    recent evolution. Hence, we are willing to accept this
-    incompleteness because it does not a regression overall.
+     - Note: the new backend does not fully support Wasm-SIMD. However,
+       the old backend no longer does, either, after the proposal's
+       recent evolution. Hence, we are willing to accept this
+       incompleteness because it does not a regression overall.
    
-* *Performance*: The new backend has acceptable compilation speed and
+1. *Performance*: The new backend has acceptable compilation speed and
   generates acceptably good code.
   
-** Earlier evaluations showed that we were trending this way. No
-   recent comprehensive comparison has been done, however. This RFC
-   proposes to use the
-   [Sightglass](https://github.com/bytecodealliance/sightglass/)
-   benchmark suite in order to evaluate both dimensions.
+   - Earlier evaluations showed that we were trending this way. No
+     recent comprehensive comparison has been done, however. This RFC
+     proposes to use the
+     [Sightglass](https://github.com/bytecodealliance/sightglass/)
+     benchmark suite in order to evaluate both dimensions.
    
-** Compilation time: we should expect as good or better compilation
-   time on most benchmarks. We have seen some cases where the register
-   allocator in the new backend can be slower on very large
-   inputs. This RFC proposes to balance such slowdowns against the
-   other benefits of the transition and to cautiously accept a small
-   budget for some such cases, in tandem with a priority effort to
-   understand the slowdown and address it soon.
+   - Compilation time: we should expect as good or better compilation
+     time on most benchmarks. We have seen some cases where the register
+     allocator in the new backend can be slower on very large
+     inputs. This RFC proposes to balance such slowdowns against the
+     other benefits of the transition and to cautiously accept a small
+     budget for some such cases, in tandem with a priority effort to
+     understand the slowdown and address it soon.
    
-*** Open question: how much degradation should we accept?
+     - Open question: how much degradation should we accept?
    
-** Runtime: we should expect as good or better code generated on most
-   benchmarks.
+   - Runtime: we should expect as good or better code generated on most
+     benchmarks.
    
-*** Open question: how much degradation should we accept?
+     - Open question: how much degradation should we accept?
 
-* *Compatibility*: there should be no known or open blocking issues
-  with the new backend when used by any significant user; in other
-  words, we should not break anyone, and if the transition would do
-  so, we should work with these stakeholder(s) first to work around
-  the issue.
+1. *Compatibility*: there should be no known or open blocking issues
+   with the new backend when used by any significant user; in other
+   words, we should not break anyone, and if the transition would do
+   so, we should work with these stakeholder(s) first to work around
+   the issue.
   
-** Status: cg\_clif and Lucet have already transitioned to the new
-   backend. Wasmtime is compatible. Firefox uses Cranelift only on
-   aarch64, which is already using the new backend framework.
+   - Status: cg\_clif and Lucet have already transitioned to the new
+     backend. Wasmtime is compatible. Firefox uses Cranelift only on
+     aarch64, which is already using the new backend framework.
 
-*** Open question: are there other projects with which we should
-    consult?
+     - Open question: are there other projects with which we should
+       consult?
 
-* *Clean fuzzing record*: we should transition our fuzzers to use the
-  new backend exclusively, and wait to ensure that no issues arise. We
-  are currently fuzzing the new backend in Wasmtime differentially
-  against an interpreter (`wasmi`), and in the past we have fuzzed it
-  differentially against the old backend when embedded in
-  Lucet. However, we have other fuzz targets as well that drive the
-  compiler in different ways.
+1. *Clean fuzzing record*: we should transition our fuzzers to use the
+   new backend exclusively, and wait to ensure that no issues arise. We
+   are currently fuzzing the new backend in Wasmtime differentially
+   against an interpreter (`wasmi`), and in the past we have fuzzed it
+   differentially against the old backend when embedded in
+   Lucet. However, we have other fuzz targets as well that drive the
+   compiler in different ways.
 
 ## Transition Steps
 
@@ -129,7 +129,7 @@ preserve stability and leave options if anything goes wrong.
    feature flags to `fuzz/Cargo.toml`; wait and verify that `oss-fuzz`
    is running the new builds and that no issues arise.
    
-   *Open question*: how long should we wait?
+   - *Open question*: how long should we wait?
    
 1. Make a final Wasmtime/Cranelift release with the old backend as
    default, to provide the latest possible "new features on old
