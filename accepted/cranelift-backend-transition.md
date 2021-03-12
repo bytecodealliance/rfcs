@@ -78,7 +78,7 @@ preserve stability and leave options if anything goes wrong.
        recent evolution. Hence, we are willing to accept this
        incompleteness because it does not a regression overall.
    
-1. *Performance*: The new backend has acceptable compilation speed and
+2. *Performance*: The new backend has acceptable compilation speed and
   generates acceptably good code.
   
    - Earlier evaluations showed that we were trending this way. No
@@ -102,7 +102,7 @@ preserve stability and leave options if anything goes wrong.
    
      - Open question: how much degradation should we accept?
 
-1. *Compatibility*: there should be no known or open blocking issues
+3. *Compatibility*: there should be no known or open blocking issues
    with the new backend when used by any significant user; in other
    words, we should not break anyone, and if the transition would do
    so, we should work with these stakeholder(s) first to work around
@@ -115,7 +115,7 @@ preserve stability and leave options if anything goes wrong.
      - Open question: are there other projects with which we should
        consult?
 
-1. *Clean fuzzing record*: we should transition our fuzzers to use the
+4. *Clean fuzzing record*: we should transition our fuzzers to use the
    new backend exclusively, and wait to ensure that no issues arise. We
    are currently fuzzing the new backend in Wasmtime differentially
    against an interpreter (`wasmi`), and in the past we have fuzzed it
@@ -131,11 +131,11 @@ preserve stability and leave options if anything goes wrong.
    
    - *Open question*: how long should we wait?
    
-1. Make a final Wasmtime/Cranelift release with the old backend as
+2. Make a final Wasmtime/Cranelift release with the old backend as
    default, to provide the latest possible "new features on old
    backend" snapshot.
    
-1. Land bytecodealliance/wasmtime#2718, which switches the defaults
+3. Land bytecodealliance/wasmtime#2718, which switches the defaults
    and makes the old backend a non-default option.
    
    - All users of `cranelift-codegen` and `wasmtime` get the new backend by default.
@@ -155,15 +155,15 @@ preserve stability and leave options if anything goes wrong.
    - The old backend continues to be tested on CI in a separate job,
      just as the new backend is tested today.
      
-1. Actively monitor users and ensure that no breakage occurs. Address
+4. Actively monitor users and ensure that no breakage occurs. Address
    any issues by fixing bugs, implementing any functionality we have
    missed, or helping users to select the old backend, if appropriate.
    
-1. Make several releases with the new backend as default. Keep the old
+5. Make several releases with the new backend as default. Keep the old
    backend alive with CI; it will be "fully supported" during this
    time, but its use will be deprecated.
 
-1. At some future point, when we are confident that no significant
+6. At some future point, when we are confident that no significant
    use-cases or dependencies remain, we can remove the old
    backend. This will be a separate RFC process with its own
    consensus-gathering.
@@ -200,16 +200,16 @@ harder and harder to justify.
 1. How much compile-time and runtime performance degradation should we
    accept, if any, before moving forward with this transition?
    
-1. Which other projects or users should we consult to ensure that we
+2. Which other projects or users should we consult to ensure that we
    will not cause unnecessary breakage?
    
-1. How long should we allow the new backend to run on all fuzz targets
+3. How long should we allow the new backend to run on all fuzz targets
    (not just the new-backend-specific one that already exists) before
    moving forward?
    
-1. How long should we retain the old backend before starting to
+4. How long should we retain the old backend before starting to
    consider its removal?
 
-1. Should we audit the old backend's code or tests to see if we are
+5. Should we audit the old backend's code or tests to see if we are
    missing any significant functionality or test coverage that should
    be moved over?
