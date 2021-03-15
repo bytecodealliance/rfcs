@@ -42,7 +42,7 @@ several significant users of the compiler have switched to the new x86
 backend by default. In particular, Lucet ([PR
 #646](bytecodealliance/lucet#646)) and rustc\_codegen\_cranelift ([PR
 #1127](bjorn3/rustc_codegen_cranelift#/1127) and [PR
-#1140](bjorn3/rustc_codegen_cranelift#1140)) have already switched to using the new backend by default (Lucet) or only (cg\_clif) option.
+#1140](bjorn3/rustc_codegen_cranelift#1140)) have already switched to using the new backend by default (Lucet) or as the only option (cg\_clif).
 
 Given this setting, we believe it is time to consider switching the
 default backend for the `cranelift-codegen` crate, hence for all users
@@ -65,18 +65,18 @@ preserve stability and leave options if anything goes wrong.
 
 1. *Feature-completeness*: All needed functionality must be present and
   all tests must pass. 
-  
+
   -  Status: we are largely there already. In
      bytecodealliance/wasmtime#2718, a trial/draft PR, the default was
      switched and all tests that are still applicable (i.e., not testing
      specific details of the old backend) are passing. Only
      bytecodealliance/wasmtime#2710 needs to land for the new backend to
      be fully feature-complete.
-   
+
      - Note: the new backend does not fully support Wasm-SIMD. However,
        the old backend no longer does, either, after the proposal's
        recent evolution. Hence, we are willing to accept this
-       incompleteness because it does not a regression overall.
+       incompleteness because it is not a regression overall.
    
 2. *Performance*: The new backend has acceptable compilation speed and
   generates acceptably good code.
@@ -171,7 +171,7 @@ preserve stability and leave options if anything goes wrong.
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-This transition's rationale largely derives from teh rationale for the
+This transition's rationale largely derives from the rationale for the
 new backend in general: the new design is simpler, more maintainable,
 generally more performant, and has a more trustworthy security
 stance. Given these benefits, if there are no blocking issues, it
@@ -193,6 +193,21 @@ support. For example, its SIMD support is not up-to-date with respect
 to the latest Wasm SIMD proposal. As other Wasm proposals advance, it
 will likely fall further behind and time spent updating it will be
 harder and harder to justify.
+
+The major alternative is simply to do nothing: retain the old backend as
+default, and new backend as a non-default option. This is the status-quo and
+has the least risk; individual embedders can always enable the new backend if
+desired.  However, it has the significant downside that it implies ongoing
+support for the old backend; in the steady state, this is twice the maintenance
+and possibly feature-implementation work for one platform (x86-64), and so we
+do not consider this to be a serious option *unless* the new backend shows
+serious defects that prevent switching.
+
+In other words, given the direction that effort is being, and will be, spent,
+and given the effort and maintenance burden of various options in the future,
+it seems to be inevitable that the switch will occur at some point. The
+question to answer is whether the new backend is ready *yet* to be the default,
+or whether we need to wait longer.
 
 # Open questions
 [open-questions]: #open-questions
