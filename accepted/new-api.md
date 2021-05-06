@@ -41,7 +41,7 @@ These are some key situations where the current API does not work well:
   all cause the Rust compiler to further complain about the `Send` and `Sync`
   properties of types.
 
-* Mangement of memory in the API can sometimes be confusing. Additionally for C
+* Management of memory in the API can sometimes be confusing. Additionally for C
   the management can be cumbersome since all objects are distinctly owned (e.g.
   `wasm_func_t` has a destructor). The confusing part arises from how you can
   create a host function, but when deleting that host function (either by
@@ -230,7 +230,7 @@ disconnecting objects from a `Store` we immediately get a lot of benefits:
   thread via `Send`).
 
 Currently in Wasmtime almost all methods also take `&self` instead of `&mut
-self`. The reason for this is that everything is effectively beyind an `Rc`
+self`. The reason for this is that everything is effectively behind an `Rc`
 which means `&mut` wouldn't give any benefits (you can't do much with `&mut
 Rc<T>` you couldn't do with `&Rc<T>`). With a uniquely-owned store, however, we
 can start using Rust's `&mut` guarantees liberally. For example anything which
@@ -686,7 +686,7 @@ impl Clone for Table {}
 impl Copy for Table {}
 
 impl Table {
-    fn new(&mut self, ty: TableType, init: Val) -> Result<Table>;
+    fn new(store: impl AsContextMut, ty: TableType, init: Val) -> Result<Table>;
     fn ty(&self, cx: impl AsContext) -> TableType;
     fn get(&self, cx: impl AsContext, idx: u32) -> Option<Val>;
     fn set(&self, cx: impl AsContextMut, idx: u32, val: Val) -> Result<()>;
