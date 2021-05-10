@@ -587,8 +587,9 @@ The goal of these traits and these implementations is to make it as ergonomic as
 we can to pass whatever kind of context you have into a function requiring a
 context and it'll work.
 
-One downside of this generic approach, however, is that you can't do something
-like this:
+One downside of this generic approach, however, is
+[rust-lang/rust#85161](https://github.com/rust-lang/rust/issues/85161) where
+this does not compile:
 
 ```rust
 fn call_func(store: &mut Store<()>, func: Func) {
