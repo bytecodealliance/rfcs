@@ -1528,3 +1528,24 @@ go through to get `Send` futures are quite numerous.
   count every time it's passed around. Overall this means that updates to the
   reference count should be rare-ish in Rust (similar to how they're rare-ish
   with `Arc<T>`).
+
+- The current implementation selects a 64-bit integer with no destructor as the
+  implementation of C API objects like `wasmtime_func_t`. This is done to have
+  the type be a "pod" type without a destructor that doesn't need to be managed,
+  it's simply an index into the `Store`. This implementaiton detail is how the
+  rest of the Rust API us currently implemented as well (e.g. `Func` is a 64-bit
+  integer). For safety in the Rust API, though, this index must also be locked
+  to a `Store`. If you, for example, mixed up `TypedFunc` ids otherwise this
+  could result in memory unsafety.
+
+  For now the implementation allocates 40 bits to a "store id" and 24 bits to an
+  index within the store. Creation of `Store` then fails if any id might be used
+  more than once (nothing is recycled). Practically this gives 3.5 years of
+  uptime if you create 10k stores per second. It only allows you to have 16
+  million objects within a store, though.
+
+  It's not clear at this time if this is something that we should settle on or
+  change in the meantime. There's a number of possible levers to change but
+  nothing seems obviously better just yet. While nothing today is likely to hit
+  either of these limits it's easy to forget about limits like this and the
+  implementation may be more difficult to change in the future.
