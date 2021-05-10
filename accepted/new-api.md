@@ -672,7 +672,7 @@ impl Copy for Global {}
 impl Global {
     fn new(cx: impl AsContextMut, ty: GlobalType, val: Val) -> Result<Global>;
     fn ty(&self, cx: impl AsContext) -> GlobalType;
-    fn get(&self, cx: impl AsContext) -> Val;
+    fn get(&self, cx: impl AsContextMut) -> Val;
     fn set(&mut self, cx: impl AsContextMut, val: Val) -> Result<()>;
 }
 ```
@@ -688,7 +688,7 @@ impl Copy for Table {}
 impl Table {
     fn new(store: impl AsContextMut, ty: TableType, init: Val) -> Result<Table>;
     fn ty(&self, cx: impl AsContext) -> TableType;
-    fn get(&self, cx: impl AsContext, idx: u32) -> Option<Val>;
+    fn get(&self, cx: impl AsContextMut, idx: u32) -> Option<Val>;
     fn set(&self, cx: impl AsContextMut, idx: u32, val: Val) -> Result<()>;
     fn grow(&self, cx: impl AsContextMut, delta: u32, val: Val) -> Result<u32>;
     fn copy(
@@ -748,13 +748,13 @@ impl Instance {
         args: &[Extern],
     ) -> Result<Instance>;
     fn ty(&self, cx: impl AsContext) -> InstanceType;
-    fn exports(&self, cx: impl AsContext) -> impl ExactSizeIterator<Item = Export>;
-    fn get_export(&self, cx: impl AsContext, name: &str) -> Option<Extern>;
-    fn get_func(&self, cx: impl AsContext, name: &str) -> Option<Func>;
-    fn get_typed_func<P, R>(&self, cx: impl AsContext, name: &str) -> Result<TypedFunc<P, R>>;
-    fn get_table(&self, cx: impl AsContext, name: &str) -> Option<Table>;
-    fn get_memory(&self, cx: impl AsContext, name: &str) -> Option<Memory>;
-    fn get_global(&self, cx: impl AsContext, name: &str) -> Option<Global>;
+    fn exports(&self, cx: impl AsContextMut) -> impl ExactSizeIterator<Item = Export>;
+    fn get_export(&self, cx: impl AsContextMut, name: &str) -> Option<Extern>;
+    fn get_func(&self, cx: impl AsContextMut, name: &str) -> Option<Func>;
+    fn get_typed_func<P, R>(&self, cx: impl AsContextMut, name: &str) -> Result<TypedFunc<P, R>>;
+    fn get_table(&self, cx: impl AsContextMut, name: &str) -> Option<Table>;
+    fn get_memory(&self, cx: impl AsContextMut, name: &str) -> Option<Memory>;
+    fn get_global(&self, cx: impl AsContextMut, name: &str) -> Option<Global>;
 }
 ```
 
@@ -821,7 +821,7 @@ impl<T> Linker<'_, T> {
     fn func_wrap<P, R>(&mut self, module: &str, name: &str, func: impl IntoFunc<T, P, R>) -> Result<()>;
     // ... async versions with `func_new_async` and `func_wrapN_async` here too ...
 
-    fn instance(&mut self, store: impl AsContext<Data = T>, name: &str, instance: Instance) -> Result<()>;
+    fn instance(&mut self, store: impl AsContextMut<Data = T>, name: &str, instance: Instance) -> Result<()>;
     fn module(&mut self, store: impl AsContextMut<Data = T>, name: &str, module: &Module) -> Result<()>;
 
     fn instantiate(&mut self, store: impl AsContextMut<Data = T>, module: &Module) -> Result<Instance>;
@@ -879,7 +879,7 @@ could be defined within a store for any `T` that defines how to get access to
 ```rust
 // in the wasmtime-wasi crate
 fn add_to_linker<T>(funcs: &mut Linker<'_, T>)
-    where T: AsMut<WasiCtx>;
+    where T: BorrowMut<WasiCtx>;
 ```
 
 This means that WASI functions could be pre-defined in any `Linker<T>`
@@ -905,7 +905,7 @@ fn main() -> Result<()> {
     let module = Module::from_file(store.engine(), "examples/hello.wat")?;
     let hello = Func::wrap(&mut store, || println!("hello!"));
     let instance = Instance::new(&mut store, &module, &[hello.into()])?;
-    let run = instance.get_typed_func::<(), ()>(&store, "run")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     run.call(&mut store, ())?;
     Ok(())
 }
