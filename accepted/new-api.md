@@ -587,6 +587,40 @@ The goal of these traits and these implementations is to make it as ergonomic as
 we can to pass whatever kind of context you have into a function requiring a
 context and it'll work.
 
+One downside of this generic approach, however, is that you can't do something
+like this:
+
+```rust
+fn call_func(store: &mut Store<()>, func: Func) {
+    func.call(store, &[]);
+    func.call(store, &[]); // ERROR: use of moved value `store`
+}
+```
+
+Typically in Rust the `store` argument to each function is automatically
+reborrowed as-if the argument were `&mut *store`. The above example, however,
+fails to compile because it says `store` was moved by the first call to
+`func.call`. The reason for this is that the first parameter is a generic `impl
+AsContextMut` which means the compiler doesn't know to automatically reborrow.
+
+To get this working users will have to manually reborrow:
+
+```rust
+fn call_func(store: &mut Store<()>, func: Func) {
+    func.call(&mut *store, &[]);
+    func.call(store, &[]);
+}
+```
+
+or use nested mutable references:
+
+```rust
+fn call_func(mut store: &mut Store<()>, func: Func) {
+    func.call(&mut store, &[]);
+    func.call(store, &[]);
+}
+```
+
 ### `Func`
 
 Using the context types defined above the `Func` API will look similar to what
