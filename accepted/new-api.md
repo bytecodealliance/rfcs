@@ -1361,25 +1361,27 @@ it looks like to call wasm from a host function callback. Naively implemented a
 host function callback could close over a `wasmtime_store_t`, but then that
 `wasmtime_store_t` would also be kept alive by the language object closing over
 it. This cycle between the native language and Rust heaps would not be
-collect-able and could result in a memory leak. To solve this the each embedding
-will reflect the ownership of the Rust API (where a `Store` is the "owner" of
-everything) and objects like `Func` will be considered as having a "weak"
-pointer to the `Store` internally. This means that consumers will need to
-persist the `Store` somewhere to keep it alive, but otherwise `Func` doesn't
-contain a strong reference to the store itself. This allows host functions to
-close over `Func` values (or other objects) safely without resulting in a leak.
+collect-able and could result in a memory leak.
 
-The `Caller` context provided to host functions will be able to be used as the
-argument to any functions which require a store argument (such as instance
-creation). This means that even operations that require the store will not
-require closing over the `Store` itself.
+Additionally an important point is converting a `wasmtime_val_t` to a language
+value. The `WASMTIME_FUNCREF` kind of value will likely want to convert into the
+equivalent of `wasmtime_func_t`. This conversion may not always be performed in
+a context where other information like the local store is available.
 
-Other than this, though, the .NET, Go, and Python APIs will all look very
-similar. `Func` will be callable without a store context (since it will store it
-internally), and host functions can close over non-`Store` objects without
-leaking. Furthermore deallocation in managed languages will be much simpler
-since only the `Store` will have a registered finalizer. This will remove extra
-synchronization done today in Go and [fix a `wasmtime-dotnet`
+While the first of these issues could be solved with a "weak" pointer in objects
+like `Func`, it won't work well for languages like Go or for this second issue.
+Languages like Go can GC objects at any time, so manually keeping a `Store`
+alive across all usages can be tedious and error-prone. Additionally this would
+mean that the `wasmtime_val_t` would have to store a "weak" pointer to the
+store, which makes it much less of a wrapper around the original API.
+
+For these reasons the .NET, Go, and Python APIs will all get updated to pass the
+store explicitly like is happening in Rust and C. Unlike in Rust there won't be
+the concept of a "context", though. You'll simply be able to pass in either a
+`Store` or a `Caller` into the various functions. Furthermore deallocation in
+managed languages will be much simpler since only the `Store` will have a
+registered finalizer. This will remove extra synchronization done today in Go
+and [fix a `wasmtime-dotnet`
 issue](https://github.com/bytecodealliance/wasmtime-dotnet/issues/53). Finally
 this will make the lifetime of data living within a `Store` much more explicit
 since there's only one "owned" handle to a store.
