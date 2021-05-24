@@ -981,7 +981,7 @@ fn main() -> Result<()> {
 
 Given the above Rust API, the next piece to consider is the impact this has on
 the C API for Wasmtime. In shape this Rust API looks extremely different from
-`wasm.h` which does not have any sort of context handled passed around anywhere.
+`wasm.h` which does not have any sort of context handle passed around anywhere.
 Additionally there's a bit of a disconnect where Wasmtime's implementation of
 `wasm.h` involves objects like `wasm_func_t` being distinctly owned but the
 context handles are only valid for an ephemeral period of time. Additionally the
