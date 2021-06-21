@@ -67,7 +67,7 @@ consider several known users of Cranelift:
   bytecodealliance/lucet#646. Feature flag to continue to use old
   backend.
   
-* cg\_clif: transitioend to new backend in
+* cg\_clif: transitioned to new backend in
   bjorn3/rustc_codegen_cranelift#1127 and removed ability to use old
   backend.
   
