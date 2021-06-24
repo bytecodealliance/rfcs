@@ -40,7 +40,7 @@ results, or code-layout information, will not find the information on
 the CLIF after compilation is done: the new backends produce the
 information in a separate IR (VCode). There is thus a cognitive
 overhead involved in maintaining "old and deprecated" vs. "new and
-spuported" status in one's head for bits of the compiler, and a
+supported" status in one's head for bits of the compiler, and a
 significant source of confusion for newcomers in particular.
 
 # Proposal
