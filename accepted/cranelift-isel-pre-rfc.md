@@ -680,22 +680,22 @@ be used for other purposes. For example, while it is likely that an
 instruction-selector verification effort could ultimately work with
 either approach, it is clearer at the moment that a pure
 expression-based system, with equivalence rules, can be directly
-verified given semantics of input and output languages.^[6] The more
+verified given semantics of input and output languages.[^6] The more
 restricted semantics can also be simpler to understand in some sense:
 one is just providing equivalences.
 
-[6]: There are additional questions in how backend verification would
-     work that require more research, and so it is somewhat hard to give
-     a definitive answer to what DSL features would be required for
-     verification. There is an argument that a more end-to-end approach
-     would be more appropriate, as many bugs occur in the gaps between
-     layers rather than directly in the basic lowering rules. If that's
-     the case, then verification might best be done probabilistically
-     with a fuzzing-like approach, where we drive the compiler with
-     inputs and the compiler produces a "witness proof", or
-     correspondence between input and output. However, if we wish to
-     *statically* verify *the lowering rules themselves*, this task is
-     easier when they are expression equivalences.
+[^6]: There are additional questions in how backend verification would
+      work that require more research, and so it is somewhat hard to
+      give a definitive answer to what DSL features would be required
+      for verification. There is an argument that a more end-to-end
+      approach would be more appropriate, as many bugs occur in the
+      gaps between layers rather than directly in the basic lowering
+      rules. If that's the case, then verification might best be done
+      probabilistically with a fuzzing-like approach, where we drive
+      the compiler with inputs and the compiler produces a "witness
+      proof", or correspondence between input and output. However, if
+      we wish to *statically* verify *the lowering rules themselves*,
+      this task is easier when they are expression equivalences.
 
 Thus the choice here comes down to flexibility, and possibly more
 immediate feasibility (in terms of interop with existing code, and
