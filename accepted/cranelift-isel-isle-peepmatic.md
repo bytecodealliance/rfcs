@@ -370,7 +370,7 @@ Similarly, a constructor can be attached to a term as follows:
     (constructor concat "concat")
 ```
 
-which implies the existence of a Rust functioN:
+which implies the existence of a Rust function:
 
 ```rust
 
