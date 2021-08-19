@@ -104,7 +104,7 @@ support multiple types of queries.
 
 ## Motivation
 
-For a concrete example, let us assume we a term type representing a
+For a concrete example, let us assume we have a term type representing a
 constant integer value
 
 ```plain
