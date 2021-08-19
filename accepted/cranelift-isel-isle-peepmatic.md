@@ -17,7 +17,7 @@ above, are:
 
 - Expression/value-based design with term-rewriting-like semantics.
 - Interaction with existing system, including rich query APIs, via
-  "virtual nodes" defined by external extractor functions.    
+  "virtual nodes" defined by external extractor functions.
 - Typed terms.
 - Rule application order guided by explicit priorities, but
   semantically undefined (hence flexible).
@@ -41,30 +41,45 @@ term view of the IR on the input side and machine instructions on the
 output side, such that a term represents an operator that consumes
 values and produces a value, then the rewrite rules just define
 *equivalences*. These rules are easier to validate than other sorts of
-lowering logic because "all" one has to do is to show that two values
-are equivalent.
+compiler-backend implementations because "all" one has to do is to
+show that the two sides of the equivalence are equal, separately for
+each rule (i.e., the validation is modular).
 
-Most importantly, this foundational concept provides a *simple,
-understandable semantics*. The importance of this cannot be
-overstated: if the core of the DSL is complex because its design is
-intertwined with a particular backend design or strategy, or other
-incidental details, then one will not be able to use it effectively
-without understanding implementation details. On the other hand, if we
-have a clean rewrite-based semantics, one can easily convince oneself
-that a new rule is safe to add as long as it denotes a true
-equivalence. This is similar to how "equational reasoning", in
-functional programming terms, makes a program's semantics easier to
-understand (i.e., one can always substitute a function for its
-definition).
+An example of a rewrite rule might be:
 
-The order in which rewrite rules will be applied can be controlled by
-user-specified priorities (attached to extractors; see
-below). However, the language definition is careful to *not* specify
-which rule must be applied first. This leaves room for the DSL
-use-case to apply rules differently: for example, we might test/fuzz a
-backend by applying rules in a different order. One should also be
-free to tweak priorities to attempt to optimize, without fear of
-breaking the semantics.
+```plain
+
+    (rule (Iadd a b)
+          (X86Add a b))
+```
+
+which means that an `Iadd` "term" with two arguments `a` and `b` (the
+"left-hand side" or "pattern" of the rule) can be written to an
+`X86Add` term with the same arguments (the "right-hand side" or
+"expression"). One could imagine many such patterns for particular
+combinations that the target machine supports.
+
+The concept of a rewrite rule, transforming one term into another
+equivalent one, provides a *simple, understandable semantics*. The
+importance of this cannot be overstated: if the core of the DSL is
+complex because its design is intertwined with a particular backend
+design or strategy, or other incidental details, then one will not be
+able to use it effectively without understanding implementation
+details. On the other hand, if we have a clean rewrite-based
+semantics, one can easily convince oneself that a new rule is safe to
+add as long as it denotes a true equivalence. This is similar to how
+"equational reasoning", in functional programming terms (i.e., that
+one can always substitute a function invocation with its definition),
+makes a program's semantics easier to understand.
+
+The order in which rewrite rules will be applied can be influenced by
+user-specified priorities. However, the language definition is careful
+to *not* specify which rule must be applied first; priorities are just
+heuristics, or hints. This leaves room for the DSL use-case to apply
+rules differently: for example, we might test/fuzz a backend by
+applying rules in a different order. One should also be free to tweak
+priorities to attempt to optimize, without fear of breaking the
+semantics.
     
 Note that the ordering is only undefined when there are multiple legal
 choices according to the types and available rules. In other words,
@@ -75,8 +90,7 @@ lowerable with any rule ordering heuristic.
 # Extractors: Programmable Matching on Virtual Nodes
 
 The first key innovation that this DSL introduces is in how it allows
-patterns, or *left-hand sides* of rewrite rules, to *match* on input
-terms.
+patterns to *match* on input terms.
 
 A vanilla term-rewriting system operates on trees of nodes and
 transforms a single input tree (which is usually reified as an actual
@@ -88,9 +102,9 @@ value, and it is difficult to arrange the terms into a tree and then
 write the pattern-matching rules in a way that is flexible enough to
 support multiple types of queries.
 
-### Motivation
+## Motivation
 
-For a concrete example, consider if we had a term type representing a
+For a concrete example, let us assume we a term type representing a
 constant integer value
 
 ```plain
@@ -107,12 +121,15 @@ term-rewriting system, with helper functions defined appropriately, we
 might have rules like
 
 ```plain
-    (=> (iconst val)
-        (when (is-aarch64-imm12-value val))
-        (aarch64-imm12 val))
-    (=> (iconst val)
-        (when (is-aarch64-logical-imm-value val))
-        (aarch64-logical-imm val))
+    ;; 12-bit immediate form.
+    (rule (iconst val)
+          (when (is-aarch64-imm12-value val))  ;; Conditional predicate
+                                               ;; that evaluates custom logic.
+          (aarch64-imm12 val))
+    ;; Logical immediate form.
+    (rule (iconst val)
+          (when (is-aarch64-logical-imm-value val))
+          (aarch64-logical-imm val))
 ```
 
 which turns the `iconst` into an `aarch64-imm12` node and/or an
@@ -122,26 +139,26 @@ have rules that pattern-match on `aarch64-imm12` or
 instructions:
 
 ```plain
-    (=> (iadd ra imm@(aarch64-imm12 val))        ;; bind `imm` to subterm
-        (aarch64-add-reg-imm ra imm))
-    (=> (ior  ra imm@(aarch64-logical-imm val))  ;; bind `imm` to subterm
-        (aarch64-or-reg-imm imm))
+    (rule (iadd ra imm@(aarch64-imm12 val))        ;; bind `imm` to subterm
+          (aarch64-add-reg-imm ra imm))
+    (rule (ior  ra imm@(aarch64-logical-imm val))  ;; bind `imm` to subterm
+          (aarch64-or-reg-imm imm))
 ```
 
 The question then becomes: how do we build a lowering engine that can
 successfully use these rules? If we start with the semantics of "apply
 any rule that fits", we might have a situation where an immediate
 value (say, `1`) can be represented in *multiple* forms, so it might
-be nondeterministically rewritten to either of the above terms.
+be nondeterministically rewritten to either of the above terms. This
+is fundamentally a *search problem*: we need to know which rewrite
+path to take on the immediate term before we see its use.
 
-What we want instead is for a directed search of sorts: starting from
+What we want instead is a goal-directed search of sorts: starting from
 the top-level opcode match (`iadd` or `ior`), we try to rewrite into
 only the appropriate immediate form. This is what the equivalent
-handwritten backend code would do. More generally, we don't want to
-require a *general graph-search problem*, where the backend has to
-find a path that connects through the graph of possible rewrite states
-from beginning to end. Rather, we want something that can be executed
-in a more directed form.
+handwritten backend code would do. This avoids the general
+graph-search problem, instead allowing a more directed form of
+execution.
 
 ## Extractor (Left-hand Side) Functions
 
@@ -163,7 +180,7 @@ or fails to match. In other words, it is exactly the *reverse* of a
 normal function application -- for the type
 
 ```
-    (declare-extractor aarch64-imm12 (AArch64Imm12) IConst)
+    (decl aarch64-imm12 (AArch64Imm12) IConst)
 ```
 
 the extractor is a (partial) function *from* the `IConst` type (what
@@ -172,9 +189,11 @@ would be the "return type" for an ordinary function) to the
 extract one value into multiple values, just as a forward function can
 have multiple arguments.
 
-This feature was largely inspired by the Scala `unapply` function
-which can be defined on classes, as the dual of `apply`, to allow for
-programmable `match` semantics in a very similar way.
+This language concept was largely inspired by the Scala [extractor
+object](https://docs.scala-lang.org/tour/extractor-objects.html)
+feature, which allows an `unapply` function to be defined on classes
+(as the dual of `apply`) to allow for programmable `match` semantics
+in a very similar way.
 
 ## Equivalence to Base Term-Rewriting Forms
 
@@ -192,11 +211,12 @@ The next conceptual leap is that the extractor functions can serve as
 the *sole* way to access the input to the term-rewriting system if we
 allow them to be *externally-defined*. In other words, the system does
 not need to have a native data structure or abstraction for a tree of
-terms/nodes. Rather, it can have *only* extractor functions that lower
-to calls to external Rust functions. Every "match" operation in the
-left-hand side of a pattern is a programmable operation that bottoms
-out in "runtime" code of some sort, and the DSL compiler does not need
-to have any application-specific implementation of match logic. (As an
+terms/nodes at the input, with enumerable contents. Rather, it can
+have *only* extractor functions that lower to calls to external Rust
+functions. Every "match" operation in the left-hand side of a pattern
+is a programmable operation that bottoms out in "runtime" code of some
+sort, and the DSL compiler does not need to have any
+application-specific implementation of match logic. (As an
 optimization, we allow constant integer/enum value patterns directly,
 but these could be custom extractor functions with no fundamental loss
 of expressivity.)
@@ -215,29 +235,35 @@ pure "output is a tree of Rust enums" design would allow: for example,
 one can have a `(new-temp ty)` constructor that can be bound to a
 variable (see `(let ...)` form below) and used in the output tree,
 which in the generated Rust code becomes a call to
-e.g. `LowerCtx::alloc_tmp()`.
+e.g. `LowerCtx::alloc_tmp()`. More generally, this means that
+constructors return values that are arbitrary, not just the
+unevaluated literal term tree; e.g. `new-temp` could return a value of
+type `Reg` that is actually a virtual register. So in a sense this
+folds the code-editing/generating actions that the backend would
+perform with the final rewritten term tree into the production of the
+term tree itself.
 
-## Virtual Internal Term Types
+## Virtual Internal Terms
 
 So far above, we have only discussed matching on the input tree (via
 extractors) and producing the output tree (via constructors). However,
 if a chain of rules applies in succession, with a rule matching on a
 term that was produced by a prior rule application, we ideally should
-allow the rules to "communicate" directly without calling out to
-external constructors and extractors. Below we describe the
-"single-pass" compilation strategy; for now we just note that in
-addition to the above mechanisms, we allow for "virtual" terms that
-are never actually constructed but only connect rules together.
+allow the rules to chain directly without calling out to external
+constructors and extractors. Below we describe the "single-pass"
+compilation strategy; for now we just note that in addition to the
+above mechanisms, we allow for "virtual" terms that are never actually
+constructed but only connect rules together.
 
 # Heterogeneous Term Types
 
-A traditional term-rewriting system has one "type", the expression
-tree. However, when building instruction lowering, there are often
-pieces of an instruction, or intermediate knowledge constructed about
-a certain subexpression, that *should* have a more specific type. One
-could imagine a series of rewrite rules that transform the address
-input to a load instruction into an `(Amode ...)` term that encodes a
-machine-specific addressing mode; but this is not a general
+A traditional term-rewriting system has one "type": the expression
+tree node. However, when performing instruction lowering, there are
+often pieces of an instruction, or intermediate knowledge constructed
+about a certain subexpression, that *should* have a more specific
+type. One could imagine a series of rewrite rules that transform the
+address input to a load instruction into an `(Amode ...)` term that
+encodes a machine-specific addressing mode; but this is not a general
 instruction, and should not be interchangeable with others. At an even
 more basic level, a set of lowering rules from a machine-independent
 IR to a machine instruction set deals with two disjoint sets of node
@@ -410,10 +436,10 @@ the left-hand side `pattern` is:
              | constant-integer
              | constant-enum
              | (enum-variant pattern*)
-             | variable @ pattern
-             | `=` variable    ;; Match same value as variable bound
-                               ;; earlier in the pattern.
-             | (and pattern*)  ;; Match with multiple patterns.
+             | variable @ pattern  ;; Match, and also bind this subtree.
+             | variable        ;; Bind any subtree (first occurrence) or match
+                               ;; same value as variable bound earlier.
+             | (and pattern*)  ;; Match all subpatterns.
              | `_`             ;; Wildcard.
 ```
 
@@ -431,13 +457,9 @@ and the right-hand side `expr` is:
 ```
 
 The evaluation semantics are described in more detail below. Note that
-while the invocations of extractors (in a pattern context) and
-constructors (in an expression context), builtin enum destructuring
-and building, and binding and uses of variables all behave in
-relatively straightforward ways as described above, the use of terms
-defined by other rules, in both patterns and in expressions, is
-somewhat subtle and will be discussed further under "Single-Pass
-Elaboration" below.
+the use of terms defined by other rules, in both patterns and in
+expressions, is somewhat subtle and will be discussed further under
+"Single-Pass Elaboration" below.
   
 ## Exporting an Entry Point
 
@@ -447,17 +469,18 @@ can start the rule-matching process.
 
 This may seem a bit odd at first: isn't the concept of an "entry
 point" somewhat tied to an imperative view of the world, as opposed to
-a list of declarative expression-equivalence rules? The reason derives
-from ISLE's evaluation process, which is somewhat different from a
-vanilla "apply any applicable rule until fixpoint" approach. In
-particular, the matching for any particular "root term" (at the root
-of the input tree) can be fully computed as an automaton that combines
-all patterns rooted with that symbol; and when we use another internal
-term in an expression, we can immediately inline any rules that would
-apply to *that* term. (More details are given below.) So the matching
-process is a "push" rather than "pull" process: we invoke generated
-matching code with a term, and it matches (via extractor calls) until
-it produces a final output (via constructor calls).
+a list of declarative expression-equivalence rules? The need for this
+designation lies in ISLE's evaluation process, which is somewhat
+different from a vanilla "apply any applicable rule until fixpoint"
+approach. In particular, the matching procedure for any particular
+"root term" (at the root of the input tree) can be statically built as
+an automaton that combines all patterns rooted with that symbol; and
+when we use another internal term in an expression, we can immediately
+inline any rules that would apply to *that* term. (More details are
+given below.)  So the matching process is a "push" rather than "pull"
+process: we invoke generated matching code with a term, and it matches
+(via extractor calls) until it produces a final output (via
+constructor calls).
 
 Because of this, the matching must be started (the initial "push") by
 invoking an entry point corresponding to a particular root term, with
@@ -509,15 +532,16 @@ efficient compilation of the matching rules is possible, and (iii)
 reserve enough freedom to consumers of the DSL that rules can be
 flexibly used in many ways.
 
-The overall evaluation process is driven by a toplevel call into an
-entry point, defined as above, and proceeds in two phases: the
-"pattern-match" phase and the "expression-build" phase.
+Evaluation is initiated by a toplevel call into an entry point,
+defined as above, and proceeds in two phases: the "pattern-match"
+phase and the "expression-build" phase.
 
 When evaluating a pattern, we always know (i) the root term's symbol
 and (ii) the value (of some type in ISLE's type system) of the root
 term's expression. At the entry point, these are explicitly given (the
-entry-point term is fixed, and the values of arguments are given). For
-sub-matching, we will know these by the time we recursively match.
+entry-point term is fixed, and the values of arguments are given as
+arguments to the entry point). Then, as execution progresses and we
+match on subterms, we have their root symbols and values as well.
 
 If the root term's symbol is `extern`, and has an extractor, we invoke
 the extractor with the given value, receiving the argument values in
@@ -529,20 +553,18 @@ Otherwise, if the root term is defined by ISLE-internal rules, we
 first determine which rules are applicable: these are any with the
 root term as the root of their pattern. Record this as a "choice
 point" to which we can backtrack. Let us then arbitrarily pick one
-according to some prioritization scheme. The semantics are defined
-such that we try all applicable rules, in some arbitrary order, and
-the first that matches "wins". If more than one would match, results
-are determined only by the prioritization scheme. (Deterministic and
-understandable control of this scheme is thus important to allow the
-user to tweak matching behavior; see below for more.) For each
+rule according to some prioritization scheme. The semantics are
+defined such that we try all applicable rules, in some arbitrary
+order, and the first that matches wins. If more than one would match,
+results are determined only by the prioritization scheme. For each
 applicable rule, we try to match the sub-patterns against the known
 argument values, recursing as appropriate.
 
 Note that there is a way to compile this recursive-backtracking match
-behavior into a set of linearized match operator sequences (where each
-operator is an extractor invocation or a constant-value match), which
-can then be combined into more efficient code (e.g. by use of an
-automaton abstraction). See below for more.
+behavior into a set of linearized match operator sequences, where each
+operator is an extractor invocation or a constant-value match. This
+can then be combined into more efficient code, e.g. by use of an
+automaton abstraction. See below for more.
 
 When a rule's pattern (left-hand side) matches, we proceed to
 evaluation of the right-hand side. This occurs in the usual
@@ -577,13 +599,14 @@ patterns that match the terms. Two cases are relevant:
   propagation" wherein we symbolically match the patterns against the
   constructed internal-term tree. This may statically determine which
   rule we invoke and whose expression we can immediately inline. Or,
-  the pattern-matching may "reach into" arguments that are ultimately
-  bound from the entry point's original pattern, and so imply more
-  (fallible) matching-phase execution. A key restriction is that this
-  fallible matching must not depend on the return values of any
-  constructor call, to permit the phase separation to remain.
+  multiple rules may potentially match, and so we need to attempt
+  fallible matching within an inner backtracking scope.
   
-  An example of both cases follows:
+  Note that though this inlining can result in further internal
+  backtracking, it will not cause the calling rule to fail; the rule
+  is committed once we reach the right-hand side.
+  
+  An example of several cases follows:
   
 ```plain
 
@@ -623,18 +646,18 @@ patterns that match the terms. Two cases are relevant:
   respectively. In fact, this is a valid (though possibly inefficient)
   compilation strategy.
   
-  Note that there is a slight asymmetry here: when running a rule "in
-  reverse" the dispatch is actually on the term that is produced (the
-  term at the root of the expression, or right-hand side), while
-  running a rule "forward" the dispatch is on the term that is matched
-  (the term at the root of the pattern, or left-hand side). The
-  opposite side of the rule actually does not need an internal term at
-  the root, and in fact when the inlining/recursion bottoms out, it
-  must be an external extractor or constructor. Hence when defining a
-  rule, we *may* use an extractor at the root, with the consequence
-  that the rule can only be evaluated in reverse (when its RHS is
-  invoked by the pattern of another rule), such as:
-  
+The above implies that defining a rule with `(rule ...)` may attach an
+"internal extractor" to an internal term, if one is produced at the
+root on the right-hand side, and/or an "internal constructor" to an
+internal term, if one is matched at the root on the left-hand side. If
+the left-hand side pattern's *root* symbol is an externally-defined
+extractor, then this means that it will only ever be evaluated in then
+reverse direction. Similarly, if the right-hand side expression's
+*root* symbol is an externally-defined constructor, then this means it
+will only ever be evaluated in the forward direction. An example of
+the former -- a rule that has an external extractor at the pattern
+root root -- follows:
+    
 ```plain
 
     (decl extern (Extractor ...) ...)
@@ -669,9 +692,11 @@ The basic strategy is to "inline" the rule-matching that would apply
 to the newly constructed value on the right-hand side of a rule. In
 other words, if a rule transforms `(A x y)` to `(B x y)` and there is
 another rule that matches on `(B x y)`, we generate code that chains
-these two transforms together. We call this inlining "elaboration", in
-analogy to a similar flattening step in other hierarchical-design DSLs
-(in particular, hardware-description languages).
+these two transforms together, effectively inlining the `(A x y)`
+extractor on the left-hand side of the latter rule. We call this
+inlining "elaboration", in analogy to a similar flattening step in
+other hierarchical-design DSLs (in particular, hardware-description
+languages).
 
 To ensure that elaboration terminates, we disallow recursion in
 rewrite rules. This implies a stratification of term constructors:
@@ -681,6 +706,12 @@ recursion that would otherwise occur in an isel context via external
 constructors and references/names: e.g., "get input in reg" does not
 immediately recursively lower, but just marks that instruction as used
 and it will be lowered later in the scan.
+
+It is an open question whether limited recursion could be allowed
+either by (i) statically bounding the unrolling depth, or (ii)
+requiring some sort of substructural recursion, in the same way that
+some "total" functional languages used in theorem-proving (e.g. Coq)
+ensure termination.
 
 ## Linearization into Match Operators
 
@@ -714,7 +745,7 @@ Any rule for an internal term may have a priority attached, as follows:
     (rule (prio 10) (A x) (B x))
 ```
 
-Likewise, any extractor may hvae a priority attached, as follows:
+Likewise, any extractor may have a priority attached, as follows:
 
 ```plain
 
@@ -756,7 +787,10 @@ Second, the DSL encourages a mode of thinking about instructions (both
 in the IR and at the machine level, in VCode) that is more
 value-oriented. The `LowerCtx` API is designed to be a sort of general
 query API, and instruction output registers are just attributes of an
-instruction like any other. In contrast, the ISLE DSL design
+instruction like any other. Similarly, allocating temporary registers
+and emitting instructions are just imperative actions taken by
+lowering code; there is no notion of the emitted instructions being
+"equal" to values on the input side. In contrast, the ISLE DSL design
 privileges the notion of an instruction's "value". This makes the
 notation more natural when expressing algebraic-style reductions, and
 is consistent with many other instruction-selection systems. (As a
@@ -778,9 +812,10 @@ possible. This is primarily because of the "equivalent-value"
 semantics that are inherent in a term-rewriting system. The
 denotational value of a term is the symbolic or concrete value
 produced by the instruction it represents (depending on the
-interpretation); so "all" we have to do is to write, e.g., equations
-for some SMT-solver or theorem-prover that describe the semantics of
-instruction terms on either side of the translation.
+interpretation); so "all" we have to do is to write, e.g.,
+pre/post-conditions for some SMT-solver or theorem-prover that
+describe the semantics of instruction terms on either side of the
+translation.
 
 Note that while externally-defined extractors and constructors at
 first glance may appear to make this more difficult, because they
@@ -805,27 +840,43 @@ tree of constructor calls that build the output instructions.
       (Const (val u64))
       ...)
       
-    (type Reg primitive)
-    (type Insn primitive)
-    (type OwnedInsn primitive)
-    (type Value primitive)
+    (type Reg primitive)        ;; virtual register number in output
+    (type Insn primitive)       ;; instruction ID
+    (type OwnedInsn primitive)  ;; instruction ID; type indicates we are the only user
+    (type Value primitive)      ;; SSA value number in input
     (type usize primitive)
       
     ;; Extractor/constructor to go between an instruction reference and its produced value.
+    ;; We can use `InsnValue` as an extractor to go from `Value` arguments to the producing
+    ;; instructions, walking "up the operand tree" as needed to match trees of instructions.
     (decl InsnValue (Insn) Value)
     (extractor InsnValue ...)
     (constructor InsnValue ...)
+    
+    ;; Constructor to indicate that a value should be lowered into a register.
+    (decl ValueReg (Value) Reg)
+    (constructor ValueReg ...)
+
     ;; Extractor to get instruction that produces a value consumed *only* by
     ;; the currently-lowering instruction (and nowhere else).
-    (decl OwnedInput (OwnedInsn) Value)
-    (extractor OwnedInput ...)
+    (decl OwnedValue (OwnedInsn) Value)
+    (extractor OwnedValue ...)
     
-    (decl Opcode (Insn) Opcode)
+    ;; Extractor that takes an instruction ID and provides its opcode.
+    (decl Opcode (Opcode) Insn)
     (extractor Opcode ...)
-
-    ;; TODO: build an `Add` convenience extractor with `Opcode`, `InsnValue`,
-    ;; and `InsnInput`.
     
+    ;; Convenience extractors/matchers for each defined instruction.
+    ;; These could be generated automatically in a build.rs step
+    ;; and then included in a prelude.
+    (decl Iadd (Value Value) Insn)
+    (rule (and (Opcode Iadd) (InsnInput 0 a) (InsnInput 1 b))
+          (Iadd a b))
+    (decl Iconst (u64) Insn)
+    (rule (and (Opcode Iconst) (InsnImmediate 0 imm))
+          (Iconst imm))
+    ; ...
+
     ;; --- x86 backend ---
       
     ; Note that while existing VCode instructions for x86 have explicit destination
@@ -838,6 +889,7 @@ tree of constructor calls that build the output instructions.
       (Move (a Reg))
       (Add (a Reg) (b Reg))
       (AddMem (a Reg) (b X86AMode))
+      (AddConst (a Reg) (b u32))
     (type X86AMode
       (...))
       
@@ -846,29 +898,29 @@ tree of constructor calls that build the output instructions.
     (decl LowerAMode (Input) X86AMode)
 
     ; Addressing mode: const + other
-    (rule (LowerAMode (InputInsn (Add (InputInsn (Const c)) other)))
-      (BasePlusOffset (InputToReg other) c))
+    (rule (LowerAMode (InsnValue (Iadd (InsnValue (Iconst c)) other)))
+      (BasePlusOffset (ValueReg other) c))
      
     ; Addressing mode: fallback
     (rule (LowerAMode input)
-      (BaseReg (InputToReg input)))
+      (BaseReg (ValueReg input)))
 
     ; Main lowering entry point: this term reduces an `Inst` as an arg to an `X86Inst`.
     (decl (Lower Inst) X86Inst)
 
-    ; Add with constant on one input.
-    (rule (Lower (Add (FromInst (Const c)) b) out)
-      (Emit (Move out (InputReg b)))
-      (Emit (AddConst out c)))
+    ; Add with constant on one input. `I32Value` extractor matches a `u64`
+    ; immediate that fits in an `i32` (signed 32-bit immediate field).
+    (rule (Lower (Iadd (InsnValue (I32Value (Iconst c))) b))
+      (AddConst (ValueReg b) c))
 
     ; Add with load on one input.
     ; Note the `FromInstOnlyUse` which ensures we match only if
     ; this is the *sole* use.
-    (rule (Lower (Add (OwnedInsn (Load addr)) b))
-      (AddMem (InputReg b) (LowerAMode addr)))
+    (rule (Lower (Iadd (OwnedValue (Iload addr)) b))
+      (AddMem (ValueReg b) (LowerAMode addr)))
       
     ; Fallback for Add.
-    (rule (Lower (Add a b))
-      (Add a b))  ;; lookup of constructor name is type-dependent --
-                  ;; here we get X86Inst::Add.
+    (rule (Lower (Iadd a b))
+      (Add (ValueReg a) (ValueReg b)))  ;; lookup of constructor name is type-dependent --
+                                        ;; here we get X86Inst::Add.
 ```
