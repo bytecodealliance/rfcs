@@ -329,15 +329,15 @@ stay up-to-date with Wasmtime and it's not appropriate to ossify a version for
 years and expect it to continue to work and receive everlasting maintenance.
 
 Each release of Wasmtime will bump the major version number of Wasmtime itself.
-This means, for example, that Wasmtime 2.0 will be released one month after
-Wasmtime 1.0. After one year Wasmtime will be at 12.0. At this time it is not
+This means, for example, that Wasmtime 2.0 will be released four weeks after
+Wasmtime 1.0. After one year Wasmtime will be at 14.0. At this time it is not
 planned that "minor" releases will be made of the 1.1.0 variety. Note that this
 means means that not all major releases will actually contain breaking changes.
 The reason we propose to nevertheless always bump the major version is that this
 allows us to keep Wasmtime's version number in sync with that of its various
 language-specific embeddings: as a developer using Wasmtime, you shouldn't have
-to worry about how how the version number of your language's Wasmtime embedding
-lines up with that of Wasmtime itself. E.g., if you use`wasmtime-py 7.0`, you
+to worry about how the version number of your language's Wasmtime embedding
+lines up with that of Wasmtime itself. E.g., if you use `wasmtime-py 7.0`, you
 can be sure that you're using Wasmtime 7.0. Trying to keep major version bumps
 to a minimum while keeping version numbers aligned would force us to still bump
 Wasmtime's and all embeddings' version numbers whenever there's a breaking
@@ -352,8 +352,8 @@ binaries. Embeddings will all be tagged and released as appropriate to
 language-specific package managers (such as crates.io and PyPI). Wasmtime will
 always be released from the `main` branch of the Wasmtime repository itself,
 which means that all development is happening on `main` and once something lands
-it's guaranteed to be in the next release. Note that bug fixes and such for
-historical releases are discussed later in this proposal.
+it's guaranteed to be in the next release, unless reverted. Note that bug fixes
+and such for historical releases are discussed later in this proposal.
 
 Releasing a new version of Wasmtime every 4 weeks can be quite rapid for some
 users who don't necessarily want to stay up-to-date with the latest and greatest
@@ -365,7 +365,7 @@ runtime. For these users, this leads well into the next section ...
 Wasmtime will support some releases for an extended period of time relative to
 other releases. These releases will be known as "long term support" releases or
 LTS releases. **Wasmtime will support two active LTS versions at any point in
-time, each supported for 10 months at a time**.
+time, each supported for 10 releases at a time**.
 
 For users who want to use Wasmtime but are not interested in upgrading monthly,
 this will be a suitable alternative where Wasmtime LTS versions will have the
@@ -381,7 +381,7 @@ that is off-by-default in an LTS version it will also not be backported. Other
 bug fixes (and of course security fixes) will be backported to supported LTS
 versions.
 
-An LTS version is considered "supported" for 10 release cycles, or 40 weeks (~10
+An LTS version is considered "supported" for 10 release cycles, or 40 weeks (~9
 months). Wasmtime will have two LTS versions at any point in time, with a new
 LTS happening every 5 releases (20 weeks, ~5 months). For ease of remembering
 what's an LTS and what isn't, all releases of Wasmtime divisible by 5 will be
@@ -389,7 +389,7 @@ LTS version, with the exception of 1.0 being an LTS version as well. For example
 the LTS versions of Wasmtime will be 1.0, 5.0, 10.0, 15.0, etc.
 
 This cadence means that users who do not want to upgrade Wasmtime monthly will
-be expected to upgrade Wasmtime at least every 10 months, likely every 5 months.
+be expected to upgrade Wasmtime at least every 9 months, likely every 5 months.
 These upgrades are likely to be less "hassle-free" than each individual version
 upgrade since it will accumulate at least 5 releases worth of minor breaking
 changes. But in exchange, users of LTS versions have a 5-month window to
