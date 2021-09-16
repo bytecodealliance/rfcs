@@ -355,69 +355,18 @@ which means that all development is happening on `main` and once something lands
 it's guaranteed to be in the next release, unless reverted. Note that bug fixes
 and such for historical releases are discussed later in this proposal.
 
-Releasing a new version of Wasmtime every 4 weeks can be quite rapid for some
-users who don't necessarily want to stay up-to-date with the latest and greatest
-of Wasmtime, but still want the stability of a production-ready WebAssembly
-runtime. For these users, this leads well into the next section ...
-
-### Long-term Support Releases
-
-Wasmtime will support some releases for an extended period of time relative to
-other releases. These releases will be known as "long term support" releases or
-LTS releases. **Wasmtime will support two active LTS versions at any point in
-time, each supported for 10 releases at a time**.
-
-For users who want to use Wasmtime but are not interested in upgrading monthly,
-this will be a suitable alternative where Wasmtime LTS versions will have the
-following properties while the version is considered "supported":
-
-* They will receive security fixes.
-* They will receive bug fixes related to correctness.
-* They will _not_ receive new features.
-
-For example if a new WebAssembly proposal is implemented it will not be
-backported to LTS versions. Additionally if a bug is fixed in a wasm proposal
-that is off-by-default in an LTS version it will also not be backported. Other
-bug fixes (and of course security fixes) will be backported to supported LTS
-versions.
-
-An LTS version is considered "supported" for 10 release cycles, or 40 weeks (~9
-months). Wasmtime will have two LTS versions at any point in time, with a new
-LTS happening every 5 releases (20 weeks, ~5 months). For ease of remembering
-what's an LTS and what isn't, all releases of Wasmtime divisible by 5 will be
-LTS version, with the exception of 1.0 being an LTS version as well. For example
-the LTS versions of Wasmtime will be 1.0, 5.0, 10.0, 15.0, etc.
-
-This cadence means that users who do not want to upgrade Wasmtime monthly will
-be expected to upgrade Wasmtime at least every 9 months, likely every 5 months.
-These upgrades are likely to be less "hassle-free" than each individual version
-upgrade since it will accumulate at least 5 releases worth of minor breaking
-changes. But in exchange, users of LTS versions have a 5-month window to
-upgrade while staying on a supported version.
-
-LTS versions will be maintained in separate branches of the Wasmtime repository.
-At this time it's expected that LTS versions will not needed separate branches
-in separate embedding repos and tags will suffice. The branch names for the
-Wasmtime repository will be `lts-latest` and `lts-oldest` for the most recent
-and the second-most-recent LTS version.
-
 ## Backports - Security fixes
 
-With an established concept of releases and LTS for Wasmtime this provides a
-framework to discuss how security issues are handled in Wasmtime's release
-process. **Security issues will be applied to the current version and supported
-LTS versions of Wasmtime**. Security fixes will always be released as patch
-releases. The current version of Wasmtime at the time of the issue being made
-public will be patched in addition to the LTS versions at the time.
+**Security issues will be applied to the current version of Wasmtime**. Security
+fixes will always be released as patch releases. The current version of Wasmtime
+at the time of the issue being made public will be patched, but no other
+historical versions will be patched.
 
-For example, if Wasmtime is currently at 12.0 then the current LTS versions are
-5.0 and 10.0. If a security issue is identified at this time then the following
-new releases will be made available: 5.0.1, 10.0.1, 12.0.1. No other versions of
-Wasmtime is guaranteed to receive a patch, for example 11.0 will not be patched
-as it's neither LTS nor current. Additionally 1.0 will also not be patched
-despite it being an LTS version because it is no longer a supported LTS
-version. Some older releases may be patched at the discretion of the project at
-the time of the release, however.
+For example, if Wasmtime is currently at 12.0 then when a security issue is
+discovered 12.0.1 will be issued. No other versions of Wasmtime is guaranteed to
+receive a patch, for example 11.0 will not be patched as it's not current.
+Some older releases may be patched at the discretion of the project at the time
+of the release, however.
 
 Patch releases in this sense are expected to be *guaranteed* to be a low-effort
 upgrade. Wasmtime developers will ensure that 5.0.1 is API-compatible with 5.0.0
@@ -429,9 +378,9 @@ to be trivial to perform.
 
 While not as critical as security issues bugs do happen and fixes will get
 landed. **Wasmtime will adopt a policy where a bug fix is backported to the
-current version and supported LTS versions if it fixes on-by-default behavior
-and is suitable to backport**. This should ensure that both the current version
-and LTS versions are free of known-bugs for on-by-default behavior.
+current version if it fixes on-by-default behavior and is suitable to
+backport**. This should ensure that the current version is free of known-bugs
+for on-by-default behavior.
 
 The two clauses about about bug fix backports are:
 
@@ -470,6 +419,15 @@ Designing a release process and stability story for Wasmtime involves a fair
 amount of subjectivity and naturally there are a number of alternatives that
 could be pursued beyond just tweaking minor details of the proposal:
 
+* Once-every-four-weeks is a relatively rapid release cycle which is not
+  guaranteed to be suitable for all consumers. One of the biggest ways to
+  mitigate this would be with an LTS-style release where a branch of Wasmtime is
+  supported for a longer period of time and receives backports. At this time,
+  though, we don't have concrete users asking for this, instead current
+  consumers all express desire to stay up-to-date with Wasmtime. We can always
+  add an LTS process after-the-fact so this RFC proposes the conservative route
+  of not having one to start off.
+
 * One immediate alternative is to attempt to provide strong API-stability
   guarantees instead of a possibly-API-breaking change every 4 weeks. The reason
   this was not proposed is that it's expected that it would unnecessarily hinder
@@ -481,23 +439,22 @@ could be pursued beyond just tweaking minor details of the proposal:
   cadence. This means, though, that new features are artificially delayed in
   Wasmtime and cannot land when they are originally implemented. Furthermore
   there would be no way to land intermediate work which would continue to be
-  developed in-tree. Overall it's expected that users who want API-stability
-  from Wasmtime are sufficiently serviced with Wasmtime's LTS versions which
-  guarantee API-stability but lack new features. At this time an alternative of
-  API-stable releases still getting new non-API-breaking features is seen as too
-  much of a hindrance to the development of Wasmtime itself.
+  developed in-tree. Overall it's expected that users largely want to stay
+  up-to-date anyway. At this time an alternative of API-stable releases still
+  getting new non-API-breaking features is seen as too much of a hindrance to
+  the development of Wasmtime itself.
 
 * Technically there's nothing really stopping feature-development being
-  backported to LTS versions so long as the feature doesn't change any APIs.
+  backported to prior versions so long as the feature doesn't change any APIs.
   This proposal, however, only indicates that security issues and bugs are
-  backported to LTS versions. This is intended to be a relatively conservative
-  starting position where we could still backport features as necessary if
-  someone's willing to put in the work. The fear, though, is that the backport
-  process becomes relatively complicated and LTS backports are likely less
-  battle-tested than changes on `main` due to the nature of mismatch between the
-  original state of `main` and the LTS itself. To help make what is already a
-  somewhat complicated process a bit simpler, this proposal states that new
-  features are not backported to LTS releases.
+  backported to the current versions. This is intended to be a relatively
+  conservative starting position where we could still backport features as
+  necessary if someone's willing to put in the work. The fear, though, is that
+  the backport process becomes relatively complicated and are likely less
+  battle-tested than changes on `main` due to the nature of mismatch between
+  the original state of `main` and the backport target. To help make what is
+  already a somewhat complicated process a bit simpler, this proposal states
+  that new features are not backported beyond the current release.
 
 * LTS versions in theory could be dropped entirely. There aren't known users who
   are specifically asking for LTS versions and existing production users of
@@ -518,20 +475,14 @@ could be pursued beyond just tweaking minor details of the proposal:
   * Wasmtime developers now have to keep track of breaking changes and determine
     whether any landed in the 4-week release window.
   * This makes Wasmtime's versioning less predictable.
-  * LTS is somewhat more murky in this scenario. If it still happens every 5th
-    release we'll have to keep track of what the 5th release is, and if both
-    2.0.0 and 2.5.0 are LTS releases then it's not clear why projects would use
-    2.0.0 as opposed to 2.6.0 if it were the current version (since everything
-    is semver-compatible).
   * If the `wasmtime` Rust crate didn't have any breaking changes it doesn't
     mean that the embedding APIs also didn't have any breaking changes (or vice
     versa too).
 
   By having a new major version every 4 weeks it's definitely a form of "least
   common denominator" solution but it also provides a predictable versioning
-  number as well as a clear indication of what is LTS and what isn't. For these
-  reasons it's proposed here to use a new major version every 4 weeks instead of
-  gauging via breaking changes or not.
+  number. For these reasons it's proposed here to use a new major version every
+  4 weeks instead of gauging via breaking changes or not.
 
 # Open questions
 [open-questions]: #open-questions
@@ -545,14 +496,3 @@ could be pursued beyond just tweaking minor details of the proposal:
     repositories?
   * How hard will it be to make a patch release with a bug fix?
   * How hard will it be to remember what branches need backporting?
-
-- Will living on an LTS release be annoying to users? For example users may not
-  know that each 5 releases are LTS or they may otherwise get warned by tooling
-  like `cargo outdated` that their dependency is behind-the-times when it's
-  intentionally so. One possibility to solve this would be `wasmtime-lts`
-  packages for all package managers which are versioned independently from the
-  `wasmtime` package (basically the `wasmtime` package divided by 5). In Rust,
-  for example, the crate would simply reexport the `wasmtime` package itself.
-  This would require a `*-lts` release of all Wasmtime crates, though, including
-  those like `wasmtime-wasi` and it's not sure if this would work well from an
-  automation point of view and such.
