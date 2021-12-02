@@ -25,7 +25,7 @@ In a single sentence, the priorities and direction for Cranelift in
 efforts concrete, expand the feature set as needed, and let ongoing
 work stabilize and mature*.
 
-In a litle more detail, we identify the following five areas of work,
+In a little more detail, we identify the following five areas of work,
 which we will expand below:
 
 1. Complete the *ISLE*
@@ -47,7 +47,8 @@ which we will expand below:
    ways to facilitate verification efforts as well.
    
 3. Add compiler support for *tail calls*, *exception handling*, and
-   other features rquired by the Wasm frontend for upcoming proposals.
+   other features required by the Wasm frontend for upcoming
+   proposals.
    
 4. Continue to innovate in testing methodologies: add some randomized
    testing by instrumenting the backend to perturb compilation
@@ -78,7 +79,7 @@ roadmap](https://github.com/bytecodealliance/rfcs/pull/8), we provide
 a summary table of project areas, individual tasks/milestones within
 those areas. Each task/milestone is categorized as either *Concrete*
 or *Ambitious*, depending on whether we know exactly what must be done
-("just burn down a TODO list of mundane issueS") or not ("solve a
+("just burn down a TODO list of mundane issues") or not ("solve a
 research problem"). In addition, each is classified with a confidence
 level in completing the task in the coming year: *High* or *Medium*.
 
@@ -125,7 +126,7 @@ instruction-selector DSL; and regalloc2, a new register allocator.
 
 Most of the implementation work for both of these projects occurred in
 2021: regalloc2 is essentially complete as a standalone project, with
-just its Cranelift ingegration pending; and ISLE was [recently
+just its Cranelift integration pending; and ISLE was [recently
 merged](https://github.com/bytecodealliance/wasmtime/pull/3506) with
 ongoing work to migrate all of our instruction lowerings to the DSL.
 
@@ -138,7 +139,7 @@ because, as described in the [pre-RFC
 #13](https://github.com/cfallin/rfcs/blob/cranelift-isel-pre-rfc/accepted/cranelift-isel-pre-rfc.md),
 the DSL was designed explicitly to allow gradual migration via its
 close integration with the Rust code, both "vertically" (within a
-single instruciton lowering, we can call Rust helpers) and
+single instruction lowering, we can call Rust helpers) and
 "horizontally" (separate instructions can be migrated
 separately). Thus, the main objective while performing the migration
 should be to retain parity: instruction lowering tests continue to
@@ -155,13 +156,13 @@ now, for example, each instruction type (the type that implements
 `MachInst` for each architecture) is a large Rust enum and some trait
 methods for fetching and rewriting register metadata, pretty-printing
 a disassembly, and the like. If we generated this information from a
-table of metadata (e.g. a checked-in TOML or YAML file), the result
-would be easier to use and less error-prone. Then the only handwritten
-code should be (i) the emission code for each instruction format (we
-do *not* want to revert to Rust-code-in-strings that solved this
-problem in the old backends' DSL), and (ii) handwritten helpers for
-things like immediate formats and type predicates, invoked from ISLE
-as extractors.
+table of metadata (e.g. a TOML or YAML file), the result would be
+easier to use and less error-prone. Then the only handwritten code
+should be (i) the emission code for each instruction format (we do
+*not* want to revert to Rust-code-in-strings that solved this problem
+in the old backends' DSL), and (ii) handwritten helpers for things
+like immediate formats and type predicates, invoked from ISLE as
+extractors.
    
 Once we have fully migrated the lowering patterns, we have much more
 freedom (i) to improve the lowerings, and (ii) to change the
@@ -229,6 +230,11 @@ SIMD support and turn it on by default. Beyond that, the sky is the
 limit: any sort of special-case optimization that would have been more
 difficult to express in the handwritten pattern-matching code can now
 be added in a few lines in the DSL.
+
+Two likely useful approaches will be to (i) mine LLVM for existing,
+well-tested and well-thought-out sets of optimized lowerings, and (ii)
+leverage superoptimization tools such as
+[Souper](https://github.com/google/souper) to generate lowerings.
    
 ## Improved Optimizer (Compiler Middle-End)
 
@@ -257,7 +263,7 @@ handle many of these issues.
 
 However, multi-module WebAssembly workloads will become more common as
 [Module Linking](https://github.com/WebAssembly/module-linking) is
-used by real workloads and as tye [Interface
+used by real workloads and as the [Interface
 Types](https://github.com/WebAssembly/interface-types) idea becomes
 real. This changes everything: when we have a late-binding
 environment, in which two Wasm modules that have never met each other
@@ -299,23 +305,34 @@ other optimizations. Andrew has done some exploratory work in this
 direction and it could be interesting to see what benefits it can
 bring.
 
-### CLIF-to-CLIF Peephole Pass
+### CLIF-to-CLIF Passes
 
 As another use-case for the ISLE DSL, with slightly different glue: we
 could enable CLIF-to-CLIF transforms as well as the current
 CLIF-to-MachInst ones, and use this both for legalization and for
-architecture-independent optimizations ("peephole" patterns, algebraic
-identities, etc.). This [continues the Peepmatic
+architecture-independent optimizations (the current `preopt` pass's
+transforms, other "peephole" patterns and algebraic identities,
+etc.). This [continues the Peepmatic
 mission](https://github.com/bytecodealliance/wasmtime/pull/3543#issue-1056639878),
 as fitzgen expressed in that PR, and it's exciting to imagine where
 this could lead.
-   
-This will likely be best-implemented as a seprate pass at first,
-because we want the second (CLIF-to-MachInst) pass to be able to match
-across the individual rewrite results of the first pass, implying some
-intermediate buffering; however, composing the two passes inline in
-some way might also be interesting, if we can work out a
+
+This will likely be best-implemented as a pass at the `preopt` stage
+(implementing `preopt`'s existing rules at first), plus a pass just
+before lowering to perform legalization. The latter touches on an
+interesting design question: a separate pass is more costly, but also
+allows CLIF-to-MachInst lowering to match across the individual
+rewrite results of the first pass.  However, composing the two passes
+inline in some way might also be interesting, if we can work out a
 DSL-compiler-level way of doing this composition efficiently.
+
+A generic legalization framework using ISLE could also be used to
+provide generic lowerings for some CLIF opcodes to others in a way
+that some architecture backends can include, if needed. For example,
+if we complete support for x86-32 and ARM32, we could do so by
+leveraging a common set of 64-to-32-bit legalizations. Likewise, we
+could factor out 128-to-64-bit legalizations and use them across all
+architectures; currently these are supported per backend.
 
 ## Support for Tail Calls, Exceptions, and Other Features
 
@@ -345,7 +362,7 @@ caller, saving the side-trip back through the current function. Once a
 language or compiler IR has tail calls, they can actually be used in
 many ways: for example, they are they primary control flow mechanism
 in Scheme and are used to implement looping. When present in Wasm,
-they become a very useful tool for compilers targetting Wasm bytecode.
+they become a very useful tool for compilers targeting Wasm bytecode.
 
 The difficulty with implementing tail-call support comes in the
 *uncommon cases* (as it does for so many compiler features). In other
@@ -367,6 +384,13 @@ above. The primary Wasm-engine consumer of Cranelift, Wasmtime,
 already uses trampolines to bridge between Wasm and host-ABI code, so
 a new ABI is not a large problem; getting the corner cases right is
 the hard part!
+
+Once we have tail-call support, we will likely want to look at related
+optimizations such as a
+[contification](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.83.3937&rep=rep1&type=pdf)
+pass, which when tail-call-aware is capable of converting
+recursion-based flow control into loops and other more efficient
+structures.
 
 ### Exception Handling
 
@@ -399,6 +423,31 @@ recently Wasmtime biweekly
 meeting](https://github.com/bytecodealliance/wasmtime/blob/main/meetings/wasmtime/2021/wasmtime-10-28.md),
 it seems likely we will stick to platform-based support using DWARF
 (and eventually Windows Structured Exception Handling) for now.
+
+### Garbage Collection (GC)
+
+Currently, Cranelift provides the necessary support for precise GC
+rooting via "reference types": the `r32` and `r64` value types can be
+passed into Cranelift functions as arguments, propagate through the
+dataflow as opaque values, enter and leave specific kinds of storage
+(such as tables), and be returned. The register allocator and the
+lowering logic are careful to preserve referenced-typed-ness
+throughout the pipeline so that a GC can accurately identify which
+references are live.
+
+However, Cranelift does not yet provide adequate support for actually
+using or manipulating the references from within CLIF: there are
+[pending
+issues](https://github.com/bytecodealliance/wasmtime/issues/3217)
+where attempted casts between references and integers leads to
+regalloc panics. This should be supported: it should be possible to
+emit CLIF code that takes an `r32` or `r64`, casts it to an actual
+pointer (possibly using knowledge about the reference format used by
+the embedding runtime, e.g. with respect to tag bits or NaN boxing
+that need to be stripped) and use it. We should update the register
+allocator (likely just regalloc2) and provide canonical `ref_to_int`
+and `int_to_ref` operators that provide a supported and tested way to
+do this.
    
 ### ISA Security Features: Control-Flow Integrity and Pointer Authentication
 
@@ -520,6 +569,26 @@ clobbering state that should be unusable) can be enabled
 unconditionally as well; they then fit into a sort of "address
 sanitizer" or "debug asserts" sort of philosophy, where extra checks
 are always performed.
+
+Finally, note that there are two very interesting uses beyond the
+straightforward "fuzz with perturbations". First, *statistically sound
+benchmarking* (as implemented by Sightglass) might be able to take
+advantage of, e.g., measuring a set of runs that have been compiled
+with random function or basic-block orderings. This will need some
+careful consideration to separate what it is we wish to measure from
+what we wish to control for; but in principle, having the capability
+of randomizing small bits of the compiler pipeline at will is very
+powerful.
+
+Second, random perturbations can actually be seen as a special case of
+a general meta-framework or "control plane" for the compiler that
+directs optimization and lowering decisions. If we do the work to
+generally instrument the compiler with such a framework, we can also
+use it to, e.g., track "fuel" at compile time that is depleted by
+optimizations (bounding the amount of effort we spend), or order
+optimizations appropriately. This instrumentation could also help us
+to debug compiler issues by using the "fuel" to bisect exactly which
+transform causes an issue.
      
 ### Randomized ISLE Rule Application
 
@@ -551,7 +620,7 @@ application of rules. We could either mark some lowering rules as
 without them, or else just randomly delete rules and then discard
 fuzzing runs where the compilation fails. (ISLE's support for
 partial-functions at the top level should allow a clean exit in order
-to implement this.) Then, for N rules we could exclude, we hvae 2^N
+to implement this.) Then, for N rules we could exclude, we have 2^N
 compilers to test.
 
 These ideas both essentially are ways to produce many compilers from
@@ -565,7 +634,7 @@ rules, which is orthogonal to the "correctness against a Wasm/CLIF
 semantics spec" property tested by our usual differential fuzzing, but
 just as valuable.
      
-### Fuzzing with Custom Mutators
+### Further Fuzzing Improvements
 
 There has been substantial and very innovative progress recently in
 developing
@@ -575,8 +644,10 @@ produces a new semantically-equivalent module. This allows a fuzzing
 engine such as libFuzzer to more easily span the space of test cases
 by jumping out of local maxima, and is a very useful tool in ensuring
 the completeness of our compiler testing. We should continue to
-develop this and other Wasm-level mutators in the future to improve
-our fuzzing effectiveness.
+develop this and other fuzzing-related ideas and projects: additional
+fuzz targets (for specific parts of the compiler), additional
+mutators, additional modes or options for our test-case generator
+`wasm-smith`, etc.
 
 ## Formal Verification
 
@@ -630,7 +701,7 @@ framework, support for major Wasm features like SIMD, etc. -- we have
 a little bit of breathing room to polish what we have and resolve the
 smaller issues.
 
-### IR Semantics
+### IR Semantics and Opcode Cleanup
 
 Some of the loose ends and rough edges are semantic-definition or
 design questions that were never properly nailed down. Cranelift is
@@ -656,7 +727,18 @@ supported. Likewise, we should audit the APIs that generate and
 manipulate it to ensure that the public interface is sufficiently
 flexible and future-proof.
 
-First, there are many corners of CLIF that are not used by the Wasm
+First, there are some redundancies in the CLIF opcode set. Some of
+these are for convenience only, e.g. `iadd_imm`, which is shorthand
+for `iadd` with an `iconst` (constant/immediate). Opcodes such as this
+certainly improve code compactness, but they also clutter all of the
+code that operates on CLIF, require either an extra legalization step
+or extra lowering rules, and in general set a precedent against
+orthogonality. Especially now that we have easy pattern-matching in
+our DSL, for all of the reasons [described in this
+comment](https://github.com/bytecodealliance/wasmtime/issues/3045#issuecomment-871636751),
+we should examine the instruction set and remove redundant opcodes.
+
+Then there are many corners of CLIF that are not used by the Wasm
 frontend but are nevertheless present in the IR. These include:
 
 - boolean types
@@ -768,6 +850,14 @@ enough" to make such a release. This should include at least:
   semver breaks), and that there are no obvious holes or
   incompleteness.
   
+  It's likely that this will need to be a careful and thoughtful
+  process, given the haphazard way in which bits of API are public now
+  as an artifact of our crate divisions. One possible route is to
+  define a toplevel `cranelift` crate that exports a controlled and
+  curated set of APIs, just as `wasmtime` does for Wasmtime, and then
+  guarantee stability at this crate boundary while holding other
+  crates' interfaces to be internal and free to change.
+  
   We should consider our overall design in this light, too. We can
   always continue to evolve, and we most likely will; but we should
   not reach a major release milestone with a pending consensus like
@@ -796,3 +886,10 @@ enough" to make such a release. This should include at least:
   focus to be -- but we should publish a document to help guide future
   evolution and provide a framework for deciding which future
   directions are in-scope.
+
+## Acknowledgments
+
+This RFC contains ideas and thoughts from discussions with many
+people. Thanks in particular to @fitzgen for feedback on a draft, and
+to @sunfishcode, @tschneidereit, @abrown for extensive discussions
+over the past two years about Cranelift's direction and possibilities.
