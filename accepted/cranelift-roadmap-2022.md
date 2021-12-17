@@ -46,9 +46,9 @@ which we will expand below:
    some expected future use-cases. As we do this, we should look for
    ways to facilitate verification efforts as well.
    
-3. Add compiler support for *tail calls*, *exception handling*, and
-   other features required by the Wasm frontend for upcoming
-   proposals.
+3. Add compiler support for *tail calls*, *exception handling*,
+   *flexible vectors*, and other features required by the Wasm
+   frontend for upcoming proposals.
    
 4. Continue to innovate in testing methodologies: add some randomized
    testing by instrumenting the backend to perturb compilation
@@ -287,6 +287,14 @@ Wasm-specific information if we have it to only consider Interface
 Types-related callsites, or cross-module callsites, or something to
 that effect.
 
+Note as well that inlining goes somewhat against the current design
+principle of independent function compilation, which in turn enables
+fast parallel compilation. Inlining will either need to be done in a
+way that does not break this (perhaps via immutable snapshots of
+functions to serve as inlining sources, or building the inliner as a
+special phase that does take all functions mutably and operates on
+SCCs, or something of the sort).
+
 ### Revisit Classical Optimizations
    
 With the above done, we can revisit LICM (loop-invariant code motion),
@@ -404,7 +412,7 @@ compiler. First, it must emit metadata that correlates locations in
 the program (PC values) to relevant handlers. It must also emit
 precise metadata that enables unwinding of stack frames from any point
 that might experience a thrown exception. Finally, exceptional control
-flow must be taken into account by optimizations.
+flow and dataflow must be taken into account by optimizations.
 
 We will likely refer to existing designs here, for example [LLVM's
 exception
@@ -441,13 +449,18 @@ using or manipulating the references from within CLIF: there are
 issues](https://github.com/bytecodealliance/wasmtime/issues/3217)
 where attempted casts between references and integers leads to
 regalloc panics. This should be supported: it should be possible to
-emit CLIF code that takes an `r32` or `r64`, casts it to an actual
-pointer (possibly using knowledge about the reference format used by
-the embedding runtime, e.g. with respect to tag bits or NaN boxing
-that need to be stripped) and use it. We should update the register
-allocator (likely just regalloc2) and provide canonical `ref_to_int`
-and `int_to_ref` operators that provide a supported and tested way to
-do this.
+emit CLIF code that takes an `r32` or `r64` and actually loads from or
+stores to the pointed-to objects. This may take the form of casts and
+masking (to strip tag bits that the runtime may use), or first-class
+load-from-ref / store-to-ref instructions. Whatever the design, we
+should account for the many possible ways that runtimes will represent
+pointers (meaning that we cannot assume that `r32`/`r64` values are
+just raw pointers; arbitrary CLIF, including e.g. additional
+indirection, may be needed to do the access). We should also design to
+prevent subtle rooting errors: for example, perhaps we can have a
+separate variable of load/store operators that takes a ref in addition
+to an actual pointer, to keep the ref live.
+
    
 ### ISA Security Features: Control-Flow Integrity and Pointer Authentication
 
@@ -571,14 +584,14 @@ sanitizer" or "debug asserts" sort of philosophy, where extra checks
 are always performed.
 
 Finally, note that there are two very interesting uses beyond the
-straightforward "fuzz with perturbations". First, *statistically sound
-benchmarking* (as implemented by Sightglass) might be able to take
-advantage of, e.g., measuring a set of runs that have been compiled
-with random function or basic-block orderings. This will need some
-careful consideration to separate what it is we wish to measure from
-what we wish to control for; but in principle, having the capability
-of randomizing small bits of the compiler pipeline at will is very
-powerful.
+straightforward "fuzz with perturbations" (or differentially fuzz
+between perturbations). First, *statistically sound benchmarking* (as
+implemented by Sightglass) might be able to take advantage of, e.g.,
+measuring a set of runs that have been compiled with random function
+or basic-block orderings. This will need some careful consideration to
+separate what it is we wish to measure from what we wish to control
+for; but in principle, having the capability of randomizing small bits
+of the compiler pipeline at will is very powerful.
 
 Second, random perturbations can actually be seen as a special case of
 a general meta-framework or "control plane" for the compiler that
