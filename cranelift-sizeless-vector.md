@@ -18,12 +18,80 @@ Rust is also currently starting to use LLVM's ScalableVectorType and, as a targe
 # Proposal
 [proposal]: #proposal
 
-We can add sizeless vector types by modifying existing structs to hold an extra bit of information to represent the sizeless nature:
+The following proposal includes changes to the type system, adding specific entities for sizeless stack slots as well as specific instructions that take those entities as operands.
 
-- The new types don't report themselves as vectors, so ty.is\_vector() = false, but are explicitly reported via ty.is\_sizeless\_vector().
+We can add sizeless vector types by modifying existing structs to hold an extra bit of information to represent the sizeless nature.
+
+## Type System
+- The new types do not report themselves as vectors, so ty.is\_vector() = false, but are explicitly reported via ty.is\_sizeless\_vector().
+- is\_vector is also renamed to is\_sized\_vector to avoid ambiguity.
 - The TypeSet and ValueTypeSet structs gain a bool to represent whether the type is sizeless.
 - TypeSetBuilder also gains a bool to control the building of those types.
-- At the encoding level, a bit is used to represent whether the type is sizeless, this bit has been taken from the max number of vector lanes supported, so they'd be reduced to 128 from 256.
+- At the encoding level, a bit is used to represent whether the type is sizeless and this bit has been taken from special types range.
+- These changes allow the usual polymorphic vector operations to be automatically built for the new set of sizeless types.
+
+## IR Entities and Function Changes
+A new entity is added to the IR, the SizelessStackSlot, and the Function will hold these separately from the existing StackSlot entities, also providing two APIs to create them:
+- create\_sized\_stack\_slot
+- create\_sizeless\_stack\_slot
+
+Keeping two vectors enables us to continue to use each entity's index as it's slot identifier, and allows us to place the entities in different positions in the frame. It also enables the backends to easily track which slots are sizeless, and which are not.
+
+## Instructions
+Three new instructions are added at the IR level to use the new SizelessStackSlot entity:
+- SizelessStackAddr
+- SizelessStackLoad
+- SizelessStackStore
+
+The primary difference between these operations and their existing counterparts is that they only take a SizelessStackSlot operand, without a byte offset.
+
+## ABI Layer Changes
+
+- The method stack_stackslot_addr is renamed to sized\_stackslot\_addr.
+- The method sizeless\_stackslots\_addr is introduced, which takes a vector\_scale parameter.
+- get\_number\_of\_spillslots\_for\_value is also modified to take a vector\_scale parameter.
+
+A key challenge to supporting these new types is that the register allocator expects to be given an constant value for the size of a spill slot, for a given register class. So, the current expectation is that the backends will continue to provide a fixed number, potentially larger that they currently do. This value is provided to the ABI layer via a new method on the TargetIsa trait, vector\_scale, which returns the largest number of bytes for a target vector register. This can then also be used to scale the index when calculating the address of a SizelessStackSlot, if a backend chooses a fixed sized during code generation.
+
+With the notion of a sizeless stack slot possible, but not a sizeless spill slot, the proposed frame layout would look like the following:
+
+```
+//! ```plain
+//!   (high address)
+//!
+//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | stack args                |
+//!                              | (accessed via FP)         |
+//!                              +---------------------------+
+//! SP at function entry ----->  | return address            |
+//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | clobbered callee-saves    |
+//! unwind-frame base     ---->  | (pushed by prologue)      |
+//!                              +---------------------------+
+//! FP after prologue -------->  | FP (pushed by prologue)   |
+//!                              +---------------------------+
+//!                              | sizeless stack slots      |
+//!                              | (accessed via FP)         |
+//!                              |          ...              |
+//!                              +---------------------------+
+//!                              | spill slots               |
+//!                              | (accessed via nominal SP) |
+//!                              |          ...              |
+//!                              | stack slots               |
+//!                              | (accessed via nominal SP) |
+//! nominal SP --------------->  | (alloc'd by prologue)     |
+//! (SP at end of prologue)      +---------------------------+
+//!                              | [alignment as needed]     |
+//!                              |          ...              |
+//!                              | args for call             |
+//! SP before making a call -->  | (pushed at callsite)      |
+//!                              +---------------------------+
+//!
+//!   (low address)
+//! ```
+```
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
@@ -39,8 +107,6 @@ This doesn't mean that a backend can't select a fixed width during code generati
 # Open questions
 [open-questions]: #open-questions
 
-- Does anyone care that Cranelift could only support a maximum of 128 vector lanes? The only problem I could imagine is if someone has a 128-lane vector of 1-bit bools...
-- How will the register allocator (regalloc2..?) handle a new vector type and/or potential register aliasing?
-- Are there parts of Cranelift, which aren't backend specific, that would need to handle these types? (is there generic stack handling or anything else data size specific...?)
+- How will regalloc2 handle a new vector type and/or potential register aliasing? And will sizeless spill slots be possible?
 - What behaviour would the interpreter have? I would expect it to default to the existing simd-128 semantics.
-- Testing is also an issue, is it reasonable to assume that function under (run)test neither take or return sizeless vectors? If so, how should the result values be defined and checked against?
+- Testing is also an issue, is it reasonable to assume that function under (run)test neither take or return sizeless vectors? If so, how should the result values be defined and checked against? I have currently implemented an instruction, extract\_vector, which takes a sizeless vector and an immediate which provides an index to a 128-bit sub-vector. Together with passing scalars as function parameters and splatting them into sizeless vectors, it allows simple testing of lane-wise operations.
