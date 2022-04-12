@@ -27,8 +27,7 @@ We can add dynamic vector types by modifying existing structs to hold an extra b
 ## Type System
 - The new types do not report themselves as vectors, so ty.is\_vector() = false, but are explicitly reported via ty.is\_dynamic\_vector().
 - is\_vector is also renamed to is\_sized\_vector to avoid ambiguity.
-- The TypeSet and ValueTypeSet structs gain a bool to represent whether the type is dynamic.
-- TypeSetBuilder also gains a bool to control the building of those types.
+- The TypeSet, ValueTypeSet and TypeSetBuilder structs gains an extra NumSet to specify a minimum number of dynamic lanes.
 - At the encoding level, space has been taken from the special types range to allow for the new types. Special types now occupy 0x01-0x2f and everything else has moved to fill the space, with dynamic types occupying the end of the range 0x80-0xff.
 - These changes allow the usual polymorphic vector operations to be automatically built for the new set of dynamic types.
 
