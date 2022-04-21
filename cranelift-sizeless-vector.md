@@ -100,7 +100,7 @@ A key challenge to supporting these new types is that the register allocator exp
 
 The main change here is the introduction of dynamically created types, using an existing vector type as a base and a scaling factor represented by a global value. Using a global value fits with clif IR in that we have a value which is not expected (allowed?) to change during the execution of the function. The alternative is to add types which have an implicit scaling factor which could make verification more complicated, or impossible.
 
-The new vector types also aren't comparable to the existing vector types, which means that no existing paths can accidently try to treat them as such.
+The new vector types also aren't comparable to the existing vector types, which means that no existing paths can accidentally try to treat them as such.
 
 It's possible that the hardware vector length will be fixed, so one alternative would be to generate IR with fixed widths using information from the backend. The one advantage is that we'd not have to add dynamic types in the IR at all. But there are two main disadvantages with this approach:
 - In an ahead-of-time setting, Cranelift would not be able to take advantage of larger vectors where the width is implementation defined. It would be possible to target architecture extensions such as Intel's AVX2 and AVX-512, which have static sizes, but not for architectures like Arm's SVE.
