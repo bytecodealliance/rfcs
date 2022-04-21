@@ -98,7 +98,7 @@ A key challenge to supporting these new types is that the register allocator exp
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-The main change here is the introduction of dynamically created types, using an existing vector type as a base and a scaling factor represented by a global value. Using a global value fits with clif IR in that we have a value which is not expected (allowed?) to change during the execution of the function. The alternative is to add types which have an implicit scaling factor which could make verification more complicated, or impossible.
+The main change here is the introduction of dynamically created types, using an existing vector type as a base and a scaling factor represented by a global value. Using a global value fits with clif IR in that we have a value which is not allowed to change during the execution of the function. The alternative is to add types which have an implicit scaling factor which could make verification more complicated, or impossible.
 
 The new vector types also aren't comparable to the existing vector types, which means that no existing paths can accidentally try to treat them as such.
 
