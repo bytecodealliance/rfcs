@@ -179,10 +179,10 @@ more generic Prolog-like form where extractors and constructors are
 unified.
 
 Given that constraint, our key proposal is laid out in two parts:
-extended LHS patterns with `given` clauses, and a special notion of
+extended LHS patterns with `if-let` clauses, and a special notion of
 pure expressions.
 
-### Left-hand-side `given` clauses
+### Left-hand-side `if-let` clauses
 
 First, we propose to extend the `(rule ...)` form to take a list of
 LHS clauses. The current form, `(rule LHS RHS)`, applies the pattern
@@ -191,59 +191,80 @@ LHS clauses. The current form, `(rule LHS RHS)`, applies the pattern
 ```lisp
 
 (rule LHS_PATTERN
-  (given PAT2 EXPR2)
-  (given PAT3 EXPR3)
+  (if-let PAT2 EXPR2)
+  (if-let PAT3 EXPR3)
   ...
   RHS)
 ```
   
 This means: match the input value with `LHS_PATTERN`. Then evaluate
 `EXPR2` and match its result with `PAT2`. Likewise down the list,
-until we have matched all `given` clauses.
+until we have matched all `if-let` clauses. Like the rule's main
+right-hand side, the right-hand side of each `if-let` is an expression
+that can invoke constructors. However, these constructors (i) are
+fallible, and (ii) are pure (have no side-effects). If any expression
+on the right-hand side of an `if-let` fails, the rule fails and we try
+to match with another rule. Likewise if any pattern on the left-hand
+side of an `if-let` fails, the rule fails as well. Because there are
+no side-effects from any `if-let`s, the match can fail partway through
+the list without corrupting state.
 
-This is backwards-compatible (with no `given` clauses, the rule
-behaves the same as before). It has the same power as in-arguments,
-but in a more clearly expressed way. And it can be used in a way that
-users may know and expect from other pattern-matching languages, such
-as conditional guards, or from Rust, with code structured as nested
-`match`es on values that are extracted. And it has a structure similar
-to a let-chain, which is a common idiom on right-hand sides: it lays
-out the match into a sequence of steps with bindings naming the parts
-as we go.
+This is backwards-compatible, in that rules with no `if-let` clauses
+behave the same as before. In other words, the language is a superset
+and has the same semantics for existing programs. It has the same
+power as in-arguments, but in a more clearly expressed way. And it can
+be used in a way that users may know and expect from other
+pattern-matching languages, such as conditional guards, or from Rust,
+with code structured as nested `match`es on values that are
+extracted. And it has a structure similar to a let-chain, which is a
+common idiom on right-hand sides: it lays out the match into a
+sequence of steps with bindings naming the parts as we go.
 
-### Pure Expressions
+### Pure and Fallible Expressions
 
-Second, we propose to add a notion of pure expressions and
-constructors to allow expressions to be evaluated while we are still
-in the fallible left-hand-side matching stage, before we have
-committed to a rule.
+Second, we propose to add a notion of pureness and fallibility to
+right-hand side expressions and constructors so that we can allow
+these expressions to be evaluated while we are still in the match
+phase, progressing through the list of `if-let` clauses.
+
+This is an extension to the language because previously, programmable
+match failures had to be expressed in terms of extractors, which cause
+awkward issues as described above. In other words, this proposal
+brings a symmetry to the language by allowing either N-to-1
+constructors or 1-to-N extractors in the match phase, as long as they
+have no side-effects.
   
-Note that this was technically possible already, as the `<EXPR`
-syntax for an in-argument in a pattern embeds an arbitrary
-evaluation in the LHS. We never ran into issues because we only ever
-used in-arguments with constant integers or with already-bound
-variables. This language extension would give us a safer way of
-reasoning about the left-hand-side evaluations by drawing a formal
-line and requiring an explicit opt-in ("this constructor is safe").
+Note that evaluating expressions as part of the left-hand side pattern
+was technically possible already, as the `<EXPR` syntax for an
+extractor in-argument embeds an arbitrary evaluation. We never ran
+into issues because we only ever used in-arguments with constant
+integers or with already-bound variables. This language extension
+would give us a safer way of reasoning about the left-hand-side
+evaluations by drawing a formal line and requiring an explicit opt-in
+("this constructor is safe").
 
 This would be expressed as:
 
 ```lisp
 
 (decl u32_fallible_add (u32 u32) u32)
-;; `u32_fallible_add` can now be used in patterns in `given` clauses
+;; `u32_fallible_add` can now be used in patterns in `if-let` clauses
 (extern constructor pure u32_fallible_add u32_fallible_add)
 ```
 
 External constructors can be marked `pure` (and are not pure by
 default). Constants and enum constructors are always pure.
 
-When a constructor is used on the left-hand side, its `Option<T>`
-return type corresponds to fallibility instead of top-level partial
-mapping. So `u32_fallible_add` above returns an `Option<u32>`, and if
-it returns a `None` (presumably if the sum would not fit in a `u32`),
-then this rule does not match and we move on to trying any others that
-might apply.
+When a constructor is marked as pure, its return type becomes
+`Option<T>`, to allow the evaluation to fail. This causes us to move
+on to the next rule, as described above. Note that while internal
+constructors also return `Option<T>`, in that case the optionality
+corresponds to the partial mapping at the top level (i.e., ISLE can
+fail to match at all, allowing fallback to legacy code).
+
+Thus, `u32_fallible_add` above returns an `Option<u32>`, and if it
+returns a `None` (presumably if the sum would not fit in a `u32`),
+then this rule does not match and we move on to any others.
 
 ### Examples
 
@@ -253,35 +274,34 @@ might apply.
   ```lisp
 
   (decl u32_fallible_add (u32 u32) u32)
-  ;; `u32_fallible_add` can now be used in patterns in `given` clauses
+  ;; `u32_fallible_add` can now be used in patterns in `if-let` clauses
   (extern constructor pure u32_fallible_add u32_fallible_add)
 
   (rule (lower (load (iadd addr
                            (iadd (uextend (iconst k1))
                                  (uextend (iconst k2))))))
-        (given k (u32_fallible_add k1 k2))
+        (if-let k (u32_fallible_add k1 k2))
         (isa_load (amode_reg_offset addr k)))
   ```
   
-* A rule where a `given` clause is used to factor out a subpattern,
+* A rule where a `if-let` clause is used to factor out a subpattern,
   perhaps for clarity:
   
   ```lisp
   (rule (lower (iadd x (load addr)))
-        (given (addr_amode amode) addr)
+        (if-let (addr_amode amode) addr)
         (x64_add x (RegMemImm.Mem amode)))
   ```
   
-* A rule where a `given` clause is used to evaluate an extractor that
-  acts like a predicate, matching an empty value (an omitted
-  expression becomes `()` in Rust, the unit type):
+* A rule where a `if-let` clause is used to evaluate a fallible
+  constructor that acts like a predicate, returning an empty value
+  (matched with the wildcard `_`):
   
   ```lisp
   (rule (lower (magic_simd_op x y))
-        (given (magic_simd_extension_enabled))
+        (if-let _ (magic_simd_extension_enabled))
         (x64_magic_simd_op x y))
   ```
-  
 
 Note that all three of these examples could be expressed with inlined
 extractors in the single main pattern, and appropriate use of in-args
@@ -301,13 +321,13 @@ other words, pretty much just Prolog, but with fixed-polarity
 arguments rather than full unification.)
 
 This was worth giving serious thought, given the confluence of
-expressivity issues that kept occurring, and the generality would allow
-for significantly clearer forms of some rules. And it would, I think,
-actually not complicate the verification target too much (at least in
-principle, notwithstanding existing infrastructure built up around the
-rule/LHS/RHS paradigm): the basic "emit SMT clauses for each part of
-the pattern / expression" pass can work over a list of Prolog term
-invocations just as well as a one-LHS, one-RHS form.
+expressivity issues that kept occurring, and the generality would
+allow for significantly clearer forms of some rules. And it would, I
+think, actually not complicate the verification target too much (at
+least in principle, notwithstanding existing infrastructure built up
+around the rule/LHS/RHS paradigm): the basic "emit SMT clauses for
+each part of the pattern / expression" pass can work over a list of
+Prolog term invocations just as well as a one-LHS, one-RHS form.
 
 I think this is technically possible, and may someday serve as a
 language evolution step; but the three major reasons this is not
@@ -376,33 +396,33 @@ strategy, but the general approach will likely be:
 1. We add the notion of "pure" external constructors, and the ability
    to determine whether an expression is pure.
    
-2. We add `given` clauses to the `ast` data structures, and extend the
-   parser to parse them. This should almost entirely be able to reuse
-   parsers for patterns and expressions.
+2. We add `if-let` clauses to the `ast` data structures, and extend
+   the parser to parse them. This should almost entirely be able to
+   reuse parsers for patterns and expressions.
    
-3. We add `given` causes to the `sema` data structures, and extend the
-   semantic analysis and typechecking to translate them. This should
-   mostly be able to reuse the translation code for patterns and
-   expressions. Typechecking is somewhat less constrained than for a
-   toplevel rule, because we don't have a `decl` to start with; but we
-   can typecheck the expression of each `given` first, requiring the
-   toplevel to be a form whose type we know, and then typecheck the
-   pattern given that known type context.
+3. We add `if-let` causes to the `sema` data structures, and extend
+   the semantic analysis and typechecking to translate them. This
+   should mostly be able to reuse the translation code for patterns
+   and expressions. Typechecking is somewhat less constrained than for
+   a toplevel rule, because we don't have a `decl` to start with; but
+   we can typecheck the expression of each `if-let` first, requiring
+   the toplevel to be a form whose type we know, and then typecheck
+   the pattern given that known type context.
    
-4. We lower `given` to IR in the `lower` pass, similarly to how we
+4. We lower `if-let` to IR in the `lower` pass, similarly to how we
    lower patterns now. Because `PatternInst` already has an `Expr` arm
-   (to handle in-arguments), we can lower all of the `given`
+   (to handle in-arguments), we can lower all of the `if-let`
    expression and pattern into the LHS of the IR. This is as we should
-   expect, because the `given`s are fallible and thus part of the
+   expect, because the `if-let`s are fallible and thus part of the
    match phase.
    
 5. That's it! From IR onward, everything should work without changes:
    the IR is already a linear sequence of match operations, and so
-   appending some `given` bodies to that sequence should be perfectly
+   appending some `if-let` bodies to that sequence should be perfectly
    natural.
 
 6. At some later point, if we have moved all uses of argument polarity
-   to `given` clauses with pure constructors instead, we can remove
+   to `if-let` clauses with pure constructors instead, we can remove
    argument polarity, significantly simplifying some parts of the ISLE
    compiler. But we need not do this yet, or with any urgency;
    remaining backward-compatible now is no problem and a gradual
@@ -413,12 +433,8 @@ strategy, but the general approach will likely be:
 1. Most importantly, is this the right balance of expressivity (enough
    to solve our problems,) with minimality and simplicity (extending
    existing ideas as far as possible, remaining "conceptually small")?
-   
-2. Details of syntax: `given` seems like a reasonable starting point,
-   but other options could be `with`, `match`, `matching`, or perhaps
-   some other better idea?
-   
-3. Compatibility with all of our anticipated uses of ISLE -- this will
+
+2. Compatibility with all of our anticipated uses of ISLE -- this will
    almost certainly work with `islec`, but we should ensure that it is
    not unduly hard to update the `isle-veri` backend, and that we
    aren't precluding any other uses or analyzability later by adding
