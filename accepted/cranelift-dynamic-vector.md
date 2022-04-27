@@ -7,7 +7,7 @@ This RFC proposes a way to handle flexible vector types as specified at: https:/
 The proposal is to introduce new dynamically-sized vector types into Cranelift, that:
 - Enable dynamic vector type creation using existing fixed vector types and a dynamic scaling factor.
 - The dynamic types, 'dt', express a vector with a lane type and shape, but a target-defined scaling factor.
-- Space as been allocated in ir::Type for concrete definitions of these new types.
+- Space has been allocated in ir::Type for concrete definitions of these new types.
 - The dynamic scaling factor is a global value which is defined by the target.
 - We currently only support scaling factors which are compile-time constants.
 
@@ -27,7 +27,7 @@ We can add dynamic vector types by modifying existing structs to hold an extra b
 ## Type System
 - The new types do not report themselves as vectors, so ty.is\_vector() = false, but are explicitly reported via ty.is\_dynamic\_vector().
 - is\_vector is also renamed to is\_sized\_vector to avoid ambiguity.
-- The TypeSet, ValueTypeSet and TypeSetBuilder structs gains an extra NumSet to specify a minimum number of dynamic lanes.
+- The TypeSet, ValueTypeSet and TypeSetBuilder structs gain an extra NumSet to specify a minimum number of dynamic lanes.
 - At the encoding level, space has been taken from the special types range to allow for the new types. Special types now occupy 0x01-0x2f and everything else has moved to fill the space, with dynamic types occupying the end of the range 0x80-0xff.
 - These changes allow the usual polymorphic vector operations to be automatically built for the new set of dynamic types.
 
