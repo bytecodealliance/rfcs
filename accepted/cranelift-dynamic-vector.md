@@ -51,7 +51,9 @@ Three new instructions are added at the IR level to use the new DynamicStackSlot
 
 The primary difference between these operations and their existing counterparts is that they only take a DynamicStackSlot operand, without a byte offset.
 
-DynamicVectorScale is the other instruction introduced, and this enables the materialization of a `dyn_scale` value when used by `globalvalue`.
+DynamicVectorScale is another instruction introduced, and this enables the materialization of a `dyn_scale` value when used by `globalvalue`.
+
+ExtractVector is also introduced, currently just for testing, which takes a dynamic vector value and an immediate value as a sub-vector index. This allows us to return a fixed-width value from a test function.
 
 ## ABI Layer Changes
 
@@ -111,6 +113,5 @@ This doesn't mean that a backend can't select a fixed width during code generati
 # Open questions
 [open-questions]: #open-questions
 
-- How will regalloc2 handle a new vector type and/or potential register aliasing? And will dynamic spill slots be possible?
 - What behaviour would the interpreter have? I would expect it to default to the existing simd-128 semantics.
 - Testing is also an issue, is it reasonable to assume that function under (run)test neither take or return dynamic vectors? If so, how should the result values be defined and checked against? I have currently implemented an instruction, extract\_vector, which takes a dynamic vector and an immediate which provides an index to a 128-bit sub-vector. Together with passing scalars as function parameters and splatting them into dynamic vectors, it allows simple testing of lane-wise operations.
