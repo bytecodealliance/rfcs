@@ -4,7 +4,7 @@ This respository is the home of the RFC (request for comments) process for Bytec
 
 ## What is an RFC?
 
-An RFC is a markdown file laying out a problem and a proposed solution. To support getting feedback early on, RFCs can come in [draft](template-draft.md) or [complete](template-complete.md) forms (see the linked templates for details). Draft RFCs should be opened as [draft PRs](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests#draft-pull-requests). In either case, discussion happens by opening a pull request to place the RFC's markdown file into the `accepted` directory.
+An RFC is a markdown file laying out a problem and a proposed solution. To support getting feedback early on, RFCs can come in [draft](template-draft.md) or [full](template-full.md) forms (see the linked templates for details). Draft RFCs should be opened as [draft PRs](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests#draft-pull-requests). In either case, discussion happens by opening a pull request to place the RFC's markdown file into the `accepted` directory.
 
 ## When is an RFC needed?
 
