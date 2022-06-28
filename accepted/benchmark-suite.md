@@ -729,7 +729,7 @@ Lucet at all eventually.
 [stabilizer]: https://people.cs.umass.edu/~emery/pubs/stabilizer-asplos13.pdf
 [spec-cpu-search]: https://www.spec.org/cpuv8/
 [warmup]: https://arxiv.org/pdf/1602.00602.pdf
-[spec-characterization]: https://uweb.engr.arizona.edu/~tosiron/papers/2018/SPEC2017_ISPASS18.pdf
+[spec-characterization]: https://tosiron.com/papers/2018/SPEC2017_ISPASS18.pdf
 
 1. <span id="ref-1"/> [*Wake Up and Smell the Coffee: Evaluation Methodology for
    the 21st Century* by Blackburn et al.][dacapo]
