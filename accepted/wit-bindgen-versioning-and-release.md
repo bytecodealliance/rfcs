@@ -74,14 +74,10 @@ It will determine the crates to release based on the `released-crates` list in t
 ## Tooling
 This release process has been designed so that tooling can be configured or made to automate as much of it as possible.
 The intention is that the *Release Lead* will be able to create the *Release PR* by running a command line utility that will
- 1. traverse the commit history back to the last *Release Commit*,
- 2. determine what kind of changes have occurred to each artifact,
- 3. update the changelogs based on the Conventional Commits format commit titles,
- 4. propose a new version number for each *updated* crate,
- 5. prompt the user to choose which crates to mark as *released*
-
-
-and then render all of these changes to the source files and then indicate what the *Release PR* title should be to release the selected crates.
+ 1. Traverse the commit history back to the last *Release Commit* collecting Conventional Commits format commit messages to determine what kinds of changes and what change messages apply to each crate.
+ 2. Propose a new version number for each *updated* crate and prompt the user to choose which crates to mark as *released*.
+ 3. Update the changelogs and version numbers based on the historical info and user selection.
+ 4. Indicate what the *Release PR* title should be to release the selected crates.
 
 Ideally, this tooling will be smart enough to identify when a crates folder path changes automatically based on the crate names in `Cargo.toml` files. Handling the names of crates changing is complicated and those changes should probably be made manually after running the tool so that the history traversal never encounters a rename.
 
