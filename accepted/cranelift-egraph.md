@@ -785,7 +785,7 @@ rewrites can replace) are completely independent of the control flow
 of the function, and can be rewritten, merged, etc., at will, just as
 if there were no control flow at all. Furthermore, the process of
 making this roundtrip subsumes GVN: values are naturally deduplicated
-by the has-consing in the e-graph, and scoped elaboration uses an
+by the hash-consing in the e-graph, and scoped elaboration uses an
 initial copy of a value in place of any other copies it dominates.
 
 With some tweaks, this lowering back into a CFG of linearized code can
@@ -828,7 +828,7 @@ that it is possible to roundtrip through an e-graph.
 
 Now that we have described how we propose to build the e-graph and
 lower out of it, we will describe how we actually *use* it to optimize
-the fucntion body.
+the function body.
 
 ### Optimizations as Rewrites
 
@@ -844,7 +844,7 @@ In other words, the main flow of program optimization is:
 - Add that better version as e-nodes in the e-graph (creating new
   e-classes or using existing ones depending on whether each e-node
   deduplicates to an existing one or not);
-- And finally, *merge* the old and new values into one e-class (uusing
+- And finally, *merge* the old and new values into one e-class (using
   the union-find data structure).
   
 This is different from a traditional approach that mutates the IR
