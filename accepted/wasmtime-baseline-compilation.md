@@ -93,8 +93,9 @@ As a result of this initial layering, one will be able to build a `MachInst` as
 a Rust data structure and emit it manually, for example:
 
 ```rust
-let add = cranelift_asm::x64::AluRmiR { op: AluRmiR::Add, … }; let mut
-buf = MachBuffer::new(); add.emit(&mut buf, …);
+let add = cranelift_asm::x64::AluRmiR { op: AluRmiR::Add, … };
+let mut buf = MachBuffer::new();
+add.emit(&mut buf, …);
 ```
 
 However this is still quite cumbersome. As a next step, we will develop an API
@@ -182,7 +183,7 @@ instruction with an immediate operand would look something like this:
 ```rust
 let mut masm = cranelift_asm::x64::MacroAssembler::new();
 // request a general purpose register;
-// spill if
+// spill if none available
 let imm = self.value_stack.pop(); 
 none available let rd = self.gpr();
 masm.add(rd, imm);
@@ -244,7 +245,7 @@ a compiler argument:
 
 ```sh
 wasmtime compile --compiler=<baseline|cranelift> file.wasm
-wasmtime run --compiler=<baseline|cranelift> file.wasm ```
+wasmtime run --compiler=<baseline|cranelift> file.wasm
 ```
 
 #### Performing compilation
