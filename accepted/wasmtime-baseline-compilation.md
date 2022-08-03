@@ -192,13 +192,10 @@ masm.add(rd, imm);
 ### Integration with Wasmtime
 
 We plan to integrate the baseline compiler incrementally into Wasmtime, as an
-in-tree crate, `winch`. It will be introduced as a runtime feature, off by
-default[^3]. Taking as a guideline [Wasmtime's tiers of
+in-tree crate, `winch`. It will be introduced as a compile-time feature, off by
+default. Taking as a guideline [Wasmtime's tiers of
 support](https://github.com/bytecodealliance/wasmtime/pull/4479), this means
 that the baseline compiler will be introduced as a Tier 3 feature.
-
-[^3]: Adding a compile time feature for configuration from the start might add
-unnecessary operational complexity i.e. making testing/fuzzing harder.
 
 In general, the development of the baseline compiler will be done in phases,
 each phase covering a specific set of features:
