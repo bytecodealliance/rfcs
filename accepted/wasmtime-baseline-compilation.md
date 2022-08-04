@@ -204,17 +204,18 @@ each phase covering a specific set of features:
 |-------|--------------------------|---------------------|
 | 1     | cranelift_asm crate      | Refactoring         |
 | 1     | x64 support              | Target architecture |
+| 1     | Initial aarch64 support  | Target architecture |
 | 1     | wasi_snapshot_preview1   | WASI proposal       |
 | 1     | wasi_unstable            | WASI proposal       |
 | 1     | Multi-Memory             | Wasm proposal       |
-| 1     | Reference Types          | Wasm proposal       |
 | 1     | Epoch-based interruption | Wasmtime feature    |
 | 1     | Parallel compilation     | Wasmtime feature    |
 | 1     | Fuzzing integration      | Test coverage       |
+| 2     | Reference Types          | Wasm proposal       |
 | 2     | Fuel                     | Wasmtime feature    |
 | 2     | SIMD                     | Wasm proposal       |
 | 2     | Memory 64                | Wasm proposal       |
-| 2     | ARM support              | Target architecture |
+| 2     | Finalize aarch64 support | Target architecture |
 | 3     | s390x                    | Target architecture |
 | 3     | Debugging integration    | Debugging           |
 
