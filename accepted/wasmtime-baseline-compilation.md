@@ -185,7 +185,7 @@ let mut masm = cranelift_asm::x64::MacroAssembler::new();
 // request a general purpose register;
 // spill if none available
 let imm = self.value_stack.pop(); 
-none available let rd = self.gpr();
+let rd = self.gpr();
 masm.add(rd, imm);
 ```
 
