@@ -227,7 +227,7 @@ We plan to extend `wasmtime::Strategy` to include a baseline compiler entry:
 pub enum Strategy {
   Auto,
   Cranelift,
-  Baseline, // or Winch
+  Winch
 } 
 ```
 
@@ -235,7 +235,7 @@ Which will be configurable via the strategy method in the `wasmtime::Config`
 struct:
 
 ```rust
-config.strategy(Strategy::Baseline);
+config.strategy(Strategy::Winch);
 ```
 
 We also plan to extend Wasmtime's `run` and `compile` subcommands to support
