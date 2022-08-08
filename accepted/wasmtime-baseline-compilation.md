@@ -21,7 +21,7 @@ performance).
 
 The introduction of a baseline compiler is a first step towards: (i) faster
 compilation and startup times (ii) enabling a tiered compilation model in
-Wasmtime, similar to what is present in Wasm engines in web browsers. This RFC
+Wasmtime, similar to what is present in Wasm engines in Web browsers. This RFC
 **does not** account for tiered compilation, it only accounts for the
 introduction of a baseline compiler.
 
@@ -127,7 +127,7 @@ registers”) instead. In the baseline compiler we expect register allocation to
 occur before invoking the `MacroAssembler`; i.e., when generating the
 instructions we already know which register we are using for each operand. Doing
 otherwise (emitting with vregs first and editing later) requires actually
-buffering the MachInst structs in memory, which we do not wish to do.
+buffering the `MachInst` structs in memory, which we do not wish to do.
 
 We don’t expect to make any changes to Cranelift itself beyond the layering
 refactor to borrow its `MachInst` and `MachBuffer` implementations. In
@@ -140,14 +140,11 @@ the scope of this RFC.
 
 ### Register Allocation
 
-We plan to implement register allocation in a linear[^2] fashion.
-
-[^2]: Known as [Linear Scan Register
-Allocation](http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf)
+We plan to implement register allocation in a single-pass fashion.
 
 The baseline compiler will hold a reference to a register allocator abstraction,
 which will keep a list of registers, represented by Cranelit's `Reg`
-abstraction,  per ISA, along with their availability. It will also hold
+abstraction, per ISA, along with their availability. It will also hold
 a reference to a value stack abstraction, to keep track of operands and results
 and their location as it performs compilation. These are the two key
 abstractions for register allocation:
@@ -172,7 +169,7 @@ A particular value can be tagged as either a:
 
 Registers will be requested to the register allocator every time an operation
 requires it. If no registers are available, the baseline compiler will move
-locals and registers to memory, changing their tag to a memory offset,
+all locals and all registers to memory, changing their tag to a memory offset,
 performing what's known as spilling, effectively freeing up registers. Spilling
 will also be performed at control flow points. To reduce the number of spills,
 the baseline compiler will also perform limited constant rematerialization.
@@ -182,9 +179,9 @@ instruction with an immediate operand would look something like this:
 
 ```rust
 let mut masm = cranelift_asm::x64::MacroAssembler::new();
+let imm = self.value_stack.pop(); 
 // request a general purpose register;
 // spill if none available
-let imm = self.value_stack.pop(); 
 let rd = self.gpr();
 masm.add(rd, imm);
 ```
@@ -242,8 +239,8 @@ We also plan to extend Wasmtime's `run` and `compile` subcommands to support
 a compiler argument:
 
 ```sh
-wasmtime compile --compiler=<baseline|cranelift> file.wasm
-wasmtime run --compiler=<baseline|cranelift> file.wasm
+wasmtime compile --compiler=<winch|cranelift> file.wasm
+wasmtime run --compiler=<winch|cranelift> file.wasm
 ```
 
 #### Performing compilation
