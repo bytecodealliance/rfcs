@@ -51,7 +51,7 @@ Winch: WebAssembly Intentionally-Non-Optimizing Compiler and Host
 * Machine code generation directly from Wasm bytecode – no intermediate
   representation
 * Avoid reinventing machine-code emission – use Cranelift's instruction emitter
-  code to create an assembler library ("MacroAssembler")
+  code to create an assembler library
 * Prioritize compilation performance over runtime performance
 
 ### High-level overview
@@ -60,7 +60,7 @@ Winch: WebAssembly Intentionally-Non-Optimizing Compiler and Host
   graph TD;
   A(wasmparser)-->B(cranelift-wasm);
   A-->C(winch);
-  C-->D(MacroAssembler);
+  C-->D(Assembler);
   D-->X(cranelift-asm);
   X-->E(MachInst);
   X-->F(MachBuffer);
@@ -68,11 +68,11 @@ Winch: WebAssembly Intentionally-Non-Optimizing Compiler and Host
   G-->X;
 ```
 
-### MacroAssembler and Borrowing from Cranelift
+### Assembler and Borrowing from Cranelift
 
 We plan to factor out the lower layers of Cranelift that produce and operate on
 machine code in order to reuse them as a generic assembler library
-(“MacroAssembler”).
+(“Assembler”).
 
 The two key abstractions that will be useful to reuse are the `MachInst`
 (“machine instruction”) trait and its implementations for each architecture; and
@@ -103,39 +103,39 @@ over this that provides for procedural generation of instructions: i.e., one
 method call for each instruction. Something like:
 
 ```rust
-let mut masm = cranelift_asm::x64::MacroAssembler::new(); 
+let mut masm = cranelift_asm::x64::Assembler::new(); 
 masm.add(rd, rm);
 masm.store(rd, MemArg::base_offset(ra, 64));
 ``` 
 This would allow for
-fairly natural single-pass code emission. In essence, this is an implementation
+fairly natural single-pass code emission. In essence, this is a lower-level approximation
 of the [MacroAssembler
 idea](https://searchfox.org/mozilla-central/rev/fa71140041c5401b80a11f099cc0cd0653295e2c/js/src/jit/MacroAssembler.h)
 from SpiderMonkey. Each architecture will have an implementation of the
-MacroAssembler API; perhaps there can be a trait that abstracts commonalities,
+Assembler API; perhaps there can be a trait that abstracts commonalities,
 but enough will be different (e.g., instruction set quirks beyond the usual
 “add/sub/and/or/not” suspects, x64 two-operand form vs aarch64 three-operand
-form, and more) that we expect there to be different `MacroAssembler` types for
+form, and more) that we expect there to be different `Assembler` types for
 each ISA. This in turn implies different lowering code that invokes the
-`MacroAssembler` per ISA in the baseline compiler. The lowering code can perhaps
+`Assembler` per ISA in the baseline compiler. The lowering code can perhaps
 share many helpers that are monomorphized on the “common ISA core” trait.
 
 In the above examples, we bypass the register-allocation support, i.e. the
 ability to hold virtual register operands rather than real registers, in the
 `MachInst`s. This is supported today by passing through `RealReg`s (“real
 registers”) instead. In the baseline compiler we expect register allocation to
-occur before invoking the `MacroAssembler`; i.e., when generating the
+occur before invoking the `Assembler`; i.e., when generating the
 instructions we already know which register we are using for each operand. Doing
 otherwise (emitting with vregs first and editing later) requires actually
 buffering the `MachInst` structs in memory, which we do not wish to do.
 
 We don’t expect to make any changes to Cranelift itself beyond the layering
 refactor to borrow its `MachInst` and `MachBuffer` implementations. In
-particular we don’t expect to use the `MacroAssembler` wrapper in Cranelift, at
+particular we don’t expect to use the `Assembler` wrapper in Cranelift, at
 least at first, because it will be built around constructing and emitting
 instructions to machine code right away, without buffering (as in Cranelift’s
 VCode). It’s possible in the future that we may find other ways to make
-`MacroAssembler` generic and leverage it in Cranelift too, but that is beyond
+`Assembler` generic and leverage it in Cranelift too, but that is beyond
 the scope of this RFC.
 
 ### Register Allocation
@@ -178,7 +178,7 @@ Assuming that we have an immediate at the top of the stack, emitting an add
 instruction with an immediate operand would look something like this:
 
 ```rust
-let mut masm = cranelift_asm::x64::MacroAssembler::new();
+let mut masm = cranelift_asm::x64::Assembler::new();
 let imm = self.value_stack.pop(); 
 // request a general purpose register;
 // spill if none available
