@@ -213,10 +213,11 @@ This RFC proposes the adoption of a new middle-end optimization
 framework built around
 [e-graphs](https://en.wikipedia.org/wiki/E-graph), and rewrite rules
 on those e-graphs. We will summarize what e-graphs are and how they
-work, then work through a series of adaptations needed to allow a
-Cranelift function body with control flow to be represented in an
-e-graph. In the subsequent section we'll see how this data structure
-will actually be used for optimization rewrites.
+work, then describe our adaptation of egraphs called "acyclic egraphs"
+or aegraphs. Then we will work through a series of adaptations needed
+to allow a Cranelift function body with control flow to be represented
+in an e-graph. In the subsequent section we'll see how this data
+structure will actually be used for optimization rewrites.
 
 ### Recap: E-graphs
 
@@ -230,9 +231,9 @@ same ID.
 
 An e-graph consists of a set of *classes* (or "eclasses"), each of
 which has a set of equivalent *nodes* (or "enodes"). An eclass has an
-identity (in our implementation based on the `egg` library, simply a
-numeric index). Enodes, however, do not have an identity or name. A
-"value" in the program is represented by an eclass ID.
+identity (in our implementation, simply a numeric index). Enodes,
+however, do not have an identity or name. A "value" in the program is
+represented by an eclass ID.
 
 Aside from a map of eclass ID to eclass data (with list of nodes), an
 e-graph contains (i) a hashmap of node contents to eclass ID, to allow
@@ -265,6 +266,40 @@ The first fact is relevant to how we express a function body in an
 e-graph, and we will explore that question in this section. The second
 fact is relevant to how we use an e-graph to progressively rewrite the
 function, and we will explore that in the next section.
+
+### Making e-graphs fast: acyclic egraphs (aegraphs)
+
+An e-graph's data structure is designed to allow full *equality
+saturation*: that is, given a set of equivalences that rewrite rules
+discover, the e-graph carries through the equivalences' implications
+and fully canonicalizes all nodes. So if we have an operator node C
+that takes some node A as an argument, and an operator node D that has
+the same opcode but takes some node B as an argument, if we later
+discover that A and B are equivalent, then we must merge the nodes C
+and D as well (and onward through the graph until fixpoint).
+
+It turns out that maintaining the "parent pointers" necessary to fully
+canonicalize after equivalence updates is expensive. Furthermore, for
+"optimizer-like" rewrite rules that generally rewrite an expression
+into a cheaper-to-compute form, there is often less need for full
+recanonicalization. Instead, we can find all equivalent forms of an
+expression node right when it is created, then refer to these
+equivalent forms as a group. Restricting the "union"
+(equivalence-merge) operation to just node creation time allows for a
+much simpler data structure.
+
+This "acyclic egraph" (aegraph) data structure is an innovation of
+this proposal, but has been fully proven in a prototype. The "apply
+once at node creation" rewrite-rule strategy is similar to the
+"cascades" approach to database query optimization[^2], known and
+understood in the database community since the mid-1990s. Our
+combination of an acyclic "levelized" variant of the e-graph, with
+union-find for partial canonicalization, and cascades-style rule
+application appears to perform quite well and attain the desired
+optimization level in practice.
+
+[^2]: Goetz Graefe. "The Cascades Framework for Query Optimization."
+      In IEEE Data Engineering Bulletin, vol. 18, 1995, pp. 19--29.
 
 ### Control Flow in E-graphs
 
@@ -438,162 +473,6 @@ rewrites in any case), and allow the pure part of the program to
 "float" over this skeleton. We rewrite it as needed, then eventually
 copy the floating nodes into one or more locations in the final CFG.
 
-### Cycles from an Acyclic Graph
-
-In the node definition above, some care was taken to ensure that the
-original e-graph, as constructed from the CLIF and with every enode in
-its own eclass, is acyclic. (Cycles here are defined in terms of the
-graph obtained by taking an eclass's enodes' argument eclass IDs as
-out-edges of that eclass.) This arises mainly because block parameters
-("blockparams") are the only means to create cycles in the dataflow
-graph; the SSA dataflow is otherwise acyclic because of the
-defs-dominate-uses property. By translating block parameter values
-into "terminal" enodes (enodes without any arguments), we remove any
-cycles in the original dataflow.[^2]
-
-[^2]: Note that omitting predecessor blocks' inputs to blockparams in
-     the e-graph does have implications for optimizations that are
-     possible. In particular, we cannot write a "remove redundant
-     phis" rewrite rule (if all predecessors' inputs to a blockparam
-     are one value `v`, rewrite that blockparam as an alias to
-     `v`). We could however restore these edges eventually and write
-     such a rule, as long as we are careful to ignore the edges (i.e.,
-     effectively remove the edges, and use actual blockparams to link
-     up the dataflow) once we "elaborate" back into a CFG.
-
-This acyclic nature of the e-graph is very desirable: it allows us to
-traverse the e-graph and generate values recursively[^3] with a
-guarantee that this algorithm will terminate. If at all possible, we
-would like to preserve this property; and in fact, the "elaboration"
-procedure we describe in the next section requires it.
-
-[^3]: As manual recursion with an explicit stack, anyway, as we want
-      to avoid literal stack recursion in practice (as we do
-      throughout the rest of Cranelift).
-
-However, as soon as eclasses begin to merge, cycles may occur. To see
-how, consider the following e-graph:
-
-```plain
-          A
-         /  \
-        B     C
-      / \      \
-      D  E      F
-    /
-   G
-```
-
-If B and G were merged we might get:
-
-```plain
-         A
-        /  \
- .---B,G   C
- ^  / |      \
- | D  E       F
- \_|
-```
-
-In general, condensing two or more nodes into one node in an acyclic
-graph will produce a cycle if a path existed from one node to the
-other prior to the merge.
-
-Seen another way, a rewrite rule that rewrites an entire expression to
-just part of that expression (e.g., `x + 0 => x`) can be seen as
-"generative" (produces infinite growth) if run in reverse. Because an
-e-graph captures many equivalent expressions, rewriting "down" one
-step (to a smaller expression) produces an e-graph that is
-indistinguishable from rewriting "up" one step. (Start with `x + 0`
-and merge that eclass with `x`; one will get the same e-graph as
-starting with `x` and merging with `x + 0`.) The e-graph thus
-represents infinitely many possible expressions whenever a rewrite
-applies that makes an entire expression equivalent to one part of
-it. ("A path exists from one node to the other prior to the merge",
-specifically a path down the expression tree.) This is extremely
-counter-intuitive, because one might expect a rule `x + 0 => x` to
-only produce "smaller" expressions. The subtlety arises because of the
-monotonically-growing nature of the e-graph.
-
-### Lowering Step One: Cycle Removal
-
-Understanding *why* the cycles occur is the first step to removing
-them. Namely, we saw above that an acyclic e-graph acquires cycles
-whenever we have a rule that rewrites a whole expression to part of
-that expression.
-
-This is great news: it means that there is still an acyclic subgraph
-inside of the e-graph if we just choose one of the several possible
-equivalent enodes at an eclass in the cycle.
-
-Returning to the example from above
-
-```plain
-         A
-        /  \
- .---B,G   C
- ^  / |      \
- | D  E       F
- \_|
-```
-
-we can *delete* the `B` enode within the `B,G` eclass in order to obtain
-
-```plain
-          A
-        /  \
-      G     C
-             \
-  E           F
-```
-
-where the now-unreferenced eclass containing `E` will subsequently be
-ignored.
-
-How do we do this in the general case? We define an algorithm based on
-a *DFS traversal* of the e-graph that runs after all rewrites have
-been done in order to recover the acyclic invariant, allowing for
-codegen.[^4]
-
-[^4]: Actually, it serves as the extraction procedure for the e-graph
-      at the same time: that is, it not only deletes enodes to remove
-      cycles, but it actually chooses just one enode per eclass so we
-      have just one canonical version of each expression. But this is
-      not necessary for the essential cycle-removal property and we
-      may in fact want to remove the explicit extraction in the future
-      if instruction selection becomes more flexible.
-      
-The rough algorithm is as follows: we track state for each eclass as
-one of `None`, `Visiting`, `Visited { cost, chosen_node_idx }`,
-`Deleted`. We do a DFS from each "root" (defined by the side-effecting
-skeleton). When we visit a node, then:
-
-- if `None`, transition to `Visiting`. Visit each argument of each
-  enode in turn. The visit returns the extracted cost of that
-  argument, or "deleted", in which case the enode with that argument
-  must be deleted. We compute the minimum cost based on sum of all
-  argument costs and a fixed operator cost (a "greedy extractor" in
-  e-graph terms). If all enodes in the eclass are deleted, we mark the
-  eclass `Deleted` and return this state; otherwise, we update the
-  node state to `Visited` and reflect the cost and the enode with that
-  lowest cost.
-  
-- if `Visited`, we already know that everything reachable from this
-  eclass is acyclic and we have its cost, so we return it.
-  
-- if `Deleted`, we already know that this eclass has been deleted, so
-  we return that status; in turn this will result in the removal of
-  the enode that used it.
-  
-- if `Visiting`, we have found a cycle! As with `Deleted`, we return
-  "deleted". However, note that we do *not* delete the eclass we
-  reached; it may have other viable enodes that do not reach a cycle.
-  
-This algorithm has been described recursively, but in the final
-implementation we plan to write it with an explicit stack rather than
-implicitly relying on the callstack, so that user-controlled input
-cannot cause a stack overflow.
-
 ### Global Code Motion and Node Placement
 
 The next problem to solve, and in fact the main one aside from actual
@@ -624,9 +503,9 @@ several ways we could do this:
    Dependence Graph) approach and [R]VSDG ([Regionalized] Value State
    Dependence Graph) approach both fall into this category, broadly
    speaking, though the details are slightly different (predicates
-   vs. nested regions).[^5]
+   vs. nested regions).[^6]
    
-[^5]: See
+[^6]: See
       [Alan C. Lawrence's dissertation](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-705.html)
       for much more exploration of this space!
    
@@ -650,7 +529,7 @@ However, each of these approaches has downsides:
    to transition into and out of when the rest of the compiler works
    in terms of traditional control-flow graphs. It can be done -- for
    example, the Relooper algorithm exists to extract structured
-   control flow out of an arbitrary CFG, and Bahmann et al.[^6] show
+   control flow out of an arbitrary CFG, and Bahmann et al.[^7] show
    that one can recover the original CFG out of an RVSDG
    perfectly. Regarding the interaction of e-graph merging and RVSDGs,
    a recent [prototype](https://github.com/jameysharp/optir) by
@@ -668,7 +547,7 @@ However, each of these approaches has downsides:
    the question of where to place newly created nodes (which block to
    assign them to) when rewriting rules produce them.
 
-[^6]: Helge Bahmann, Nico Reissmann, Magnus Jahre, Jan Christian
+[^7]: Helge Bahmann, Nico Reissmann, Magnus Jahre, Jan Christian
       Meyer. "Perfect Reconstructability of Control Flow from Demand
       Dependence Graphs." ACM Transactions on Architecture and Code
       Optimization (TACO), vol. 11, no. 4,
@@ -775,7 +654,7 @@ def elaborate_block(domtree, side_effects_by_block, block, scoped_map):
   scoped_map.decrement_level()
 ```
 
-### Round-tripping Through E-graphs Subsumes GVN (and LICM?)
+### Round-tripping Through E-graphs Subsumes GVN, LICM, and Rematerialization
 
 With the encoding scheme above, cycle elimination, and scoped
 elaboration, we have a practical way of converting CLIF to an e-graph,
@@ -805,24 +684,25 @@ scoped hashmap at that level.
 placing nodes in a forward pass, rather than in a fixpoint loop
 hoisting already-placed instructions out of a loop.)
 
-### Prototype: CLIF to E-graphs and Back Again
+Finally, by having as a first-class notion the ability to regenerate
+nodes at multiple locations, we can do *rematerialization* by writing
+"policy" code only: we can override a "hit" in the value-to-ID scoped
+hash map and pretend that a value does not yet exist, regenerating a
+pure node arbitrarily many times. We have found that remateralization
+is beneficial in at least two situations: immediate constants (we
+previously special-cased this in the backend lowering driver, but once
+per use rather than once per block) and binary operators with one
+immediate operand. (Why the latter but not e.g. all binary operators?
+Because they do not increase register pressure. Sinking an add will
+cause longer liveranges for two operands in exchange for a shorter one
+for the result; sinking an add-with-imm will be at worse
+liverange-neutral, and often better if many variants like `x+4`,
+`x+8`, `x+12` are all generated and otherwise hoisted by LICM.)
 
-A prototype exists!
-[wasmtime#4249](https://github.com/bytecodealliance/wasmtime/pull/4249)
-is a PR for an integration with the `egg` e-graph library that
-round-trips CLIF through an e-graph and back at the tail end of the
-middle-end optimization pipeline, just before lowering to CLIF. It
-works, to the extent that all tests pass and it can successfully
-compile and execute SpiderMonkey.wasm in Wasmtime.
-
-It is not yet optimized or polished, in several ways: it uses
-callstack recursion in several places for prototyping simplicity; it
-rips out and then rebuilds all CLIF instructions, rather than keeping
-them in-place (and just rewriting their ordering links) for the common
-case that a node is elaborated only once; and there are probably a lot
-of micro-optimizations that can be done. Nevertheless, it served as a
-useful means to prove out the "scoped elaboration" approach and show
-that it is possible to roundtrip through an e-graph.
+This ability to easily do global (across the function) code motion,
+duplication, and deduplication is a subtle but important benefit of
+the e-graph-based approach, arguably as important as the unified
+rewrite-rule framework.
 
 ## Rewrites in an E-graph
 
@@ -894,7 +774,7 @@ best; this is a question that we will need to experiment with. We
 simply wish to acknowledge now that it *will* be a problem that we
 will need to solve.
 
-### Expressing Rewrites: ISLE or egg Patterns?
+### Expressing Rewrites in ISLE
 
 In order to express e-graph rewrite rules, we will need to define or
 adopt a language in which to write them. Within the Cranelift project
@@ -926,13 +806,13 @@ does. If we are to make e-graph rewrites fast in an environment where
 JIT-level compilation speed is necessary, we are likely to need high
 control.
 
-This RFC thus proposes that we drive rewrites by calling into
+This RFC instead thus proposes that we drive rewrites by calling into
 ISLE-generated Rust code, as we do for instruction lowering today. It
 turns out that there is a way to extend ISLE extractor semantics very
 slightly in order to allow for a natural binding of e-class, rather
 than e-node, matching, which we now describe.
 
-### Minimal ISLE Change: Multi-Extractors
+### Minimal ISLE Change: Multi-Extractors and Multi-Constructors
 
 The basic problem we need to solve is that while ISLE matching on CLIF
 is matching a single operator per value, hence an AST-like DAG, ISLE
@@ -1007,6 +887,10 @@ multiple matches (extractor results). For each we evaluate the
 sub-trie; a full match (reaching a leaf node) always returns, hence
 exits the loop early. This is just a multi-attempt generalization of
 today's control flow.
+
+We must make an analogous change to *constructors* as well, so that
+the toplevel entry point (e.g., `(decl simplify (Id) Id)`) can return
+*multiple* rewrites for one input expression.
 
 #### Efficiency
 
@@ -1095,6 +979,44 @@ post-legalization form. This should finally allow us to remove the
 `simple_legalize` framework, i.e., the last vestiges of the old
 rewrite-based Cranelift lowering approach.
 
+## Prototype
+
+A prototype exists!
+[wasmtime#4249](https://github.com/bytecodealliance/wasmtime/pull/4249)
+is a PR that includes an acyclic e-graph (aegraph) library and a
+mid-end optimizer phase. It works, to the extent that all tests pass
+and it can successfully compile and execute SpiderMonkey.wasm in
+Wasmtime.
+
+It has taken the approach recommended above: use aegraphs, and use
+ISLE to express rewrite rules. It has been optimized to the point that
+it shows the approach to be practical.
+
+Its performance profile is actually fairly nice. On two test cases
+driven by a Wasmtime frontend, SpiderMonkey.wasm and bz2.wasm, we see:
+
+* Compile time:
+  * SpiderMonkey: +1% (slower)
+  * bz2: -15% (faster)
+* Run time:
+  * SpiderMonkey: -13% (faster)
+  * bz2: -3% (faster)
+  
+This comparison is using an aegraphs configuration that fully replaces
+most optimization phases in the existing mid-end of Cranelift (GVN,
+LICM, simple\_preopt, alias analysis). This is where the
+compilation-time *speedup* comes from: we are doing the same work in a
+different way, rather than adding on work, so it is possible to come
+out ahead (while still producing better code!).
+
+It is not yet fully polished: for example, it uses callstack recursion
+in several places for prototyping simplicity. Nevertheless, it served
+as a useful means to prove out the "scoped elaboration" approach and
+show that it is possible to roundtrip through an e-graph and rewrite
+it efficiently, and optimizing its performance served as substrate in
+which the aegraph idea was derived and tested.
+
+
 ## Overall Cranelift Structure and Migration Path
 
 Given the above e-graph-based means of rewriting and optimizing CLIF,
@@ -1157,32 +1079,50 @@ efficiency:
   can just directly let the ISA-specific rule prioritization pick the
   cheapest representation by virtue of matching simpler instructions
   first.
-
+  
 Both of the above ideas are significantly more advanced than what we
 want to do at first, and we anticipate (though we need to evaluate to
 be sure) that the performance of the roundtrip through CLIF will be
 adequate enough for us to start simple.
 
+### In-aegraph Legalization as a Path to Post-opt
+
+Finally, we note that having an incremental rewrite substrate enables
+a partial return to the "legalization"-based lowering design of the
+old Cranelift backends. In other words, we could use rewrite rules to
+produce nodes in the CLIF whose representation is closer to what the
+target machine requires, while still letting all of the mid-end
+optimizations (GVN, etc) work on the post-lowering result.
+
+There are several ways to go about this. We could directly embed
+`MachInst`s in e-graph nodes. However, that is likely more expensive
+and complex than we would want. Alternatively, we could approach this
+incrementally, adding individual ops or even just rewrite rules that
+push the IR toward a desired shape.
+
+It is important to note that this does *not* propose to return to a
+single-level IR (all the way to machine-instruction encodings for each
+CLIF opcode). The major downside of that approach is that it forces
+awkward representation of machine-specific details: for example, an
+ISA-specific "load" instruction can represent a memory addressing mode
+directly, while if we use CLIF until binary emission, we have to match
+on operator subtrees. The other reason we adopted the MachInst
+lowering framework was to allow many-to-one matching in addition to
+the one-to-many expansion that legalization could do. ISLE rewrites on
+an egraph could provide that as well. But the ability of two-level IR
+to represent machine details is still an advantage.
+
+Instead, we suspect that this will be a good way to approach the long
+tail of "slightly suboptimal codegen": for example, currently
+addressing-mode lowering in both x86-64 and aarch64 can generate *new*
+add opcodes when it cannot fully pattern-match a suitable addressing
+mode, and these adds are not seen by GVN or LICM. Moving some of this
+semantic lowering into the mid-end could yield better code.
+
 ## Open Questions
 
-The main open questions are:
+1. Should we adopt the prototype's approach?
 
-1. How will e-graph-based optimization affect compile time? No
-   practical production compiler, to our knowledge, has yet been built
-   with an e-egraph-based representation at the core of its
-   optimizer. We believe it can be practical based on our initial
-   experimentation and our development of the scoped-elaboration
-   algorithm, but constant factors are important, and we should be
-   sure that we are not handicapping our compiler performance in any
-   really significant way compared to handwritten optimization passes.
-   
-2. How well will the e-graph-based interleaving of rewrite rules
-   improve upon separate handwritten passes with a carefully-chosen
-   pass schedule? In other words, do we solve the pass ordering
-   problem by composing at the per-rule-application granularity in the
-   unified framework? Literature on e-graphs suggests that we can, but
-   we will want to examine real examples once we have a reasonable
-   start on the body of rules.
-
-3. How well will the multi-extractor approach to adapting ISLE work?
-   Or alternately, should we use egg's built-in rule engine somehow?
+2. If this approach is adopted, should we pursue the followup ideas
+   (generating an egraph directly, lowering directly from an egraph,
+   legalizing within the egraph)?
