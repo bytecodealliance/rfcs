@@ -13,7 +13,7 @@ representation)](https://en.wikipedia.org/wiki/Intermediate_representation),
 before Cranelift translates it to machine instructions. Cranelift
 already has some basic optimizations in this category: [Global Value
 Numbering (GVN)](https://en.wikipedia.org/wiki/Value_numbering),
-[Loop-Independent Code Motion
+[Loop-Invariant Code Motion
 (LICM)](https://en.wikipedia.org/wiki/Loop-invariant_code_motion),
 [Constant folding](https://en.wikipedia.org/wiki/Constant_folding),
 and most recently, a very basic form of [alias
@@ -173,7 +173,10 @@ importantly (ii) eventually use an automated or semi-automated
 workflow to prove the rewrite(s) correct against a semantics for our
 IR, CLIF. Such a verification task is significantly easier when we
 process only the equivalence and not the incidental details of an
-associated hand-written transform.
+associated hand-written transform. (We still need to trust the
+rule-application engine itself, but this is a smaller body of code
+than a large collection of custom passes, and is unlikely to change
+much once developed.)
 
 ### Problem #3: Ease of Contributing Optimizations
 
@@ -204,8 +207,10 @@ well. For example, the
 tooling included tools to "harvest" potential patterns to rewrite from
 real programs, and then use the superoptimization engine
 [Souper](https://github.com/google/souper) to find rewrite rules
-offline. We could revisit such tooling and use it to build a
-significantly more effective body of rules semi-automatically.
+offline. Other tools such as
+[Ruler](https://www.mwillsey.com/papers/ruler) also exist to derive
+suitable rewrite rules. We could revisit such tooling and use it to
+build a significantly more effective body of rules semi-automatically.
 
 ## Proposal: E-graph-based Optimization
 
@@ -227,7 +232,8 @@ allows *equivalences* between these nodes to be recorded. It
 efficiently represents *all possible expressions* for a value, given
 these equivalences. It has normalizing properties: "adding" the same
 expression to an e-graph multiple times will result in exactly the
-same ID.
+same canonical representation (an identifier that points into the data
+structure) of that expression.
 
 An e-graph consists of a set of *classes* (or "eclasses"), each of
 which has a set of equivalent *nodes* (or "enodes"). An eclass has an
@@ -255,8 +261,8 @@ e-graph updates asymptotically more efficient.
 The key relevant facts here are:
 
 - An e-graph lets us build expressions out of *nodes*, each of which
-  contains references to other nodes. This is very much like a
-  sea-of-nodes IR.
+  contains references to other (classes of) nodes. This is very much
+  like a sea-of-nodes IR.
   
 - An e-graph lets us equate one node with another, such that when we
   examine the value (eclass ID), we can see both nodes and eventually
@@ -600,8 +606,18 @@ codegen_block(block_roots, {})
 ```
 
 Now, the key step: to support control flow, we need to (i) steal a
-data structure from GVN, the "scoped hashmap"; and (ii) remind
-ourselves of SSA's key invariant, that definitions dominate uses.
+data structure from Cranelift's GVN, the "scoped hashmap"; and (ii)
+remind ourselves of SSA's key invariant, that definitions dominate
+uses.
+
+To recap, a scoped hashmap is a key-value map with nested scopes that
+can be pushed and popped. An insertion creates a key-value pair in the
+deepest scope, while a lookup checks all scopes, from the innermost
+outward. Support for shadowing a key is not needed in this
+application. (Disallowing shadowing allows for a much cheaper
+implementation: the data structure can be backed by a single-level map
+with a "level" field alongside each value, and a "level generation"
+that allows us to invalidate in constant time on pop.)
 
 We start with the domtree (dominator tree), a data structure computed
 from the CFG where a block B1 is an ancestor of block B2 in the tree
