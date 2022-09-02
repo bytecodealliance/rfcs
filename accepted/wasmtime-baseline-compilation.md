@@ -53,6 +53,11 @@ Winch: WebAssembly Intentionally-Non-Optimizing Compiler and Host
 * Avoid reinventing machine-code emission – use Cranelift's instruction emitter
   code to create an assembler library
 * Prioritize compilation performance over runtime performance
+* Simple to verify by looking. It should be evident which machine instructions
+  are emitted per WebAssembly Opcode
+* Adding and iterating on new (WebAssembly and developer-facing) features should be simpler
+  than doing it in an optimizing tier (Cranelift)
+
 
 ### High-level overview
 
