@@ -1091,7 +1091,7 @@ a reasonable set of incremental milestones we can work towards.
 * [ ] Add support for the tail calls proposal in `wasm-tools`:
   * [X] `wat` and `wast`
   * [X] `wasmparser`
-  * [ ] `wasm-encoder`
+  * [X] `wasm-encoder`
   * [ ] `wasm-smith`
 * [ ] Add `return_call` and `return_call_indirect` instructions to Cranelift
       (just instructions and validation; lowerings unimplemented)
