@@ -522,7 +522,9 @@ caller, we can get into unbounded stack-growth failure modes like the following:
 * etc...
 
 The proposed design avoids dynamically tracking stack argument capacity by
-implicitly shrinking stack argument capacity on tail calls.
+shrinking stack argument capacity on tail calls. This does mean that we may need
+to copy the return address to a new location on the stack when shrinking
+capacity, but it does let us avoid dynamic capacity checks.
 
 With that out of the way, lets get into the details.
 
@@ -539,39 +541,39 @@ natural alignment if necessary). The diagram is just easier to read this way.
   |                 |       |                     |
   |                 | n/a   | Caller Frame        |
   |                 |-------|---------------------|
-stack            /  | FP+8  | Return Address      |
-  |             /   |-------|---------------------|
-grows           |   | FP+0  | Prev. Frame Pointer | <--- FP
+stack            /  | ...   | ...                 |
+  |             /   | FP+32 | Stack Argument 1    |
+grows           |   | FP+16 | Stack Argument 0    |
   |             |   |-------|---------------------|
-down            |   | FP-8  | Stack Argument 0    |
-  |      Callee |   | FP-16 | Stack Argument 1    |
-  |      Frame  |   | ...   | ...                 |
+down     Callee |   | FP+8  | Return Address      |
+  |      Frame  |   |-------|---------------------|
+  |             |   | FP+0  | Prev. Frame Pointer | <--- FP
   |             |   |-------|---------------------|
-  V             |   | ...   | ...                 |
-                \   | SP+8  | Callee Stack Slot 1 |
+  |             |   | ...   | ...                 |
+  V             \   | SP+8  | Callee Stack Slot 1 |
                  \  | SP+0  | Callee Stack Slot 0 | <--- SP
                     +-------+---------------------+
+
 ```
 
 That is, a frame is composed of the following components:
 
-* First is the return address, pushed by the call, at `FP+8`.
+* First are the stack arguments, if the callee function takes more arguments
+  than fit into registers.
+* Next is the return address, pushed by the `call`, at `FP+8`.
 * Next, at `FP+0`, is the previous frame's frame pointer.
-* Stack arguments, if the callee function takes more arguments than fit into
-  registers, follow just below `FP`.
-* The callee's local stack slots (including any multiple-return-value spaces)
-  follow after that.
-* Finally, if necessary, padding is inserted to keep `SP` 16-byte aligned. (This
-  is not depicted in the diagram, to simplify the example `SP`-based
-  addressing.)
+* The callee's local stack slots (including any multiple-return-value spaces for
+  non-tail calls it makes) follow after that.
+* Finally, if necessary, padding is inserted to keep `SP` aligned to whatever
+  the architecture requires. (This is not depicted in the diagram, to simplify
+  the example `SP`-based addressing.)
 
-Crucially, when resetting `SP` as part of the callee function's epilogue, the
-callee cleans up stack arguments. This is in contrast to, for example, System
-V's calling convention where the stack arguments are above the `FP`, and having
-the callee clean up the stack arguments is necessary for tail calls support.
-Additionally, because we maintain frame pointer chains, we continue to support
-our fast stack walker, as well as any frame pointer-based stack walking tools
-that exist externally to Wasmtime (debuggers, profilers, etc...).
+The crucial difference from native calling conventions is that the callee is
+required to clean up the stack arguments upon its exit (whether via return or
+tail call). Additionally, because we still maintain frame pointer chains, we
+continue to support our fast stack walker, as well as any frame pointer-based
+stack walking tools that exist externally to Wasmtime (debuggers, profilers,
+etc...).
 
 The following pseudocode for function prologues, epilogues, calls, and tail
 calls shows how we will maintain this frame layout:
@@ -587,23 +589,22 @@ fn call() {
     // [ ...caller-frame... ]
 
     // When computing arguments and placing them in their locations as specified
-    // by the calling convention, the caller will put stack arguments *past* its
-    // own `SP`. But it also leaves room for the return address and saved frame
-    // pointer that will be pushed in the callee function's prologue.
+    // by the calling convention, the caller will push stack arguments,
+    // incrementing `SP`.
     compute_args_and_move_them_to_registers_and_stack_slots();
 
-    //   FP               SP
-    //   |                |
-    //   V                V
-    // [ ...caller-frame... | _ | _ | ...stack-args... ]
+    //   FP                                  SP
+    //   |                                   |
+    //   V                                   V
+    // [ ...caller-frame... | ...stack-args... ]
 
     // Next we transfer control to the callee, pushing our return address (RA)
     // to the stack just before jumping to the callee.
     //
-    //   FP                   SP
-    //   |                    |
-    //   V                    V
-    // [ ...caller-frame... | RA | _ | ...stack-args... ]
+    //   FP                                      SP
+    //   |                                       |
+    //   V                                       V
+    // [ ...caller-frame... | ...stack-args... | RA ]
     call $callee;
 
     // When the call returns, the stack arguments and return address have been
@@ -617,67 +618,75 @@ fn call() {
 
 fn prologue() {
     // Upon entry to the function, the previous frame's FP is still active and
-    // the SP points to our return address. Stack arguments, if any, have
-    // already been written into our frame.
+    // the SP points to our return address.
     //
-    //   FP                   SP
-    //   |                    |
-    //   V                    V
-    // [ ...caller-frame... | RA | _ | ...stack-args... ]
+    //   FP                                      SP
+    //   |                                       |
+    //   V                                       V
+    // [ ...caller-frame... | ...stack-args... | RA ]
 
     // Save the caller's frame pointer onto the stack.
     push FP;
 
-    //   FP                        SP
-    //   |                         |
-    //   V                         V
-    // [ ...caller-frame... | RA | FP' | ...stack-args... ]
+    //   FP                                           SP
+    //   |                                            |
+    //   V                                            V
+    // [ ...caller-frame... | ...stack-args... | RA | FP' ]
 
     // The callee's frame pointer is the current stack pointer.
-    FP := SP;
+    FP = SP;
 
-    //                           FP/SP
-    //                             |
-    //                             V
-    // [ ...caller-frame... | RA | FP' | ...stack-args... ]
+    //                                              FP/SP
+    //                                                |
+    //                                                V
+    // [ ...caller-frame... | ...stack-args... | RA | FP' ]
 
     // Allocate the callee's stack frame by decrementing SP.
-    SP := SP - size_of_callee_frame();
+    SP = SP - size_of_callee_frame();
 
     // The callee's frame is now initialized.
     //
-    //                             FP                                       SP
-    //                             |                                        |
-    //                             V                                        V
-    // [ ...caller-frame... | RA | FP' | ...stack-args... | ...stack-slots... ]
+    //                                                FP                    SP
+    //                                                |                     |
+    //                                                V                     V
+    // [ ...caller-frame... | ...stack-args... | RA | FP' | ...stack-slots... ]
 }
 
 fn epilogue() {
     // When returning from the function, the stack has the following layout:
     //
-    //                             FP                                       SP
-    //                             |                                        |
-    //                             V                                        V
-    // [ ...caller-frame... | RA | FP' | ...stack-args... | ...stack-slots... ]
+    //                                                FP                    SP
+    //                                                |                     |
+    //                                                V                     V
+    // [ ...caller-frame... | ...stack-args... | RA | FP' | ...stack-slots... ]
 
-    // Deallocate the stack slots and stack arguments.
-    SP := FP;
+    // Deallocate the stack slots.
+    SP = FP;
 
-    //                           SP/FP
-    //                             |
-    //                             V
-    // [ ...caller-frame... | RA | FP' ]
+    //                                              SP/FP
+    //                                                |
+    //                                                V
+    // [ ...caller-frame... | ...stack-args... | RA | FP' ]
 
     // Restore the previous frame's FP.
-    FP := pop;
+    FP = pop;
 
-    //   FP                   SP
-    //   |                    |
-    //   V                    V
-    // [ ...caller-frame... | RA ]
+    //   FP                                      SP
+    //   |                                       |
+    //   V                                       V
+    // [ ...caller-frame... | ...stack-args... | RA ]
 
-    // Transfer control back to the caller, popping the return address.
-    return;
+    // Transfer control back to the caller, popping the return address and stack
+    // arguments.
+    //
+    // On x86_64, this can use the `ret <imm16>` form that pops an immediate
+    // number of bytes from the stack after popping the return address.
+    //
+    // Our other architectures store the return address in a register, and so
+    // they can load the return address and increment the SP as necessary to pop
+    // the stack arguments. Aarch64 can even fuse these two operations, IIUC,
+    // unsure about others.
+    return_and_pop_stack_args();
 
     // The caller's frame has been restored.
     //
@@ -691,39 +700,61 @@ fn tail_call() {
     // When tail-calling out of the function, the stack initially has the
     // following layout:
     //
-    //                             FP                                       SP
-    //                             |                                        |
-    //                             V                                        V
-    // [ ...caller-frame... | RA | FP' | ...stack-args... | ...stack-slots... ]
+    //                                                FP                    SP
+    //                                                |                     |
+    //                                                V                     V
+    // [ ...caller-frame... | ...stack-args... | RA | FP' | ...stack-slots... ]
 
     // Note that putting the new stack arguments into their slots can involve
     // shuffling values around within the stack frame. This is similar to the
     // "parallel-copy problem" in SSA at join points. More details on this
-    // later. After the new stack arguments are in place, the rest of the old
+    // later.
+    //
+    // Additionally, in the case where our current stack argument capacity does
+    // not match the callee's stack argument capacity, we have to save temporary
+    // copies of our caller's frame pointer and return address, and restore them
+    // into the correct stack location after growing or shrinking the stack
+    // argument capacity.
+    //
+    // After the new stack arguments are in place, the rest of the old
     // stack arguments and old stack slots are now garbage.
-    compute_args_and_move_them_to_registers_and_stack_slots();
+    if const { current_stack_args != callee_stack_args } {
+        // Save the old FP and return address in temporary registers.
+        let old_fp = load FP+0;
+        let ret_addr = load FP+8;
+        // Shuffle the stack arguments into their correct places.
+        compute_args_and_move_them_to_registers_and_stack_slots();
+        // Adjust FP by the stack argument capacity delta, to preserve the exact
+        // capacity required by the callee.
+        FP = FP - const { current_stack_args - callee_stack_args };
+        // Restore the old frame pointer and return address.
+        store FP+8 = ret_addr;
+        store FP+0 = old_fp;
+    } else {
+        compute_args_and_move_them_to_registers_and_stack_slots();
+    }
 
-    //                             FP                                       SP
-    //                             |                                        |
-    //                             V                                        V
-    // [ ...caller-frame... | RA | FP' | ...new-stack-args... | ...garbage... ]
 
-    // Deallocate the current stack frame, leaving the new stack arguments in
-    // place after SP.
-    SP := FP;
+    //                                                    FP                SP
+    //                                                    |                 |
+    //                                                    V                 V
+    // [ ...caller-frame... | ...new-stack-args... | RA | FP' | ...garbage... ]
 
-    //                           SP/FP
-    //                             |
-    //                             V
-    // [ ...caller-frame... | RA | FP' | ...new-stack-args... ]
+    // Deallocate the current stack frame's garbage stack slots.
+    SP = FP;
+
+    //                                                  SP/FP
+    //                                                    |
+    //                                                    V
+    // [ ...caller-frame... | ...new-stack-args... | RA | FP' ]
 
     // Restore the previous frame's FP.
-    FP := pop;
+    FP = pop;
 
-    //   FP                   SP
-    //   |                    |
-    //   V                    V
-    // [ ...caller-frame... | RA | _ | ...new-stack-args... ]
+    //   FP                                          SP
+    //   |                                           |
+    //   V                                           V
+    // [ ...caller-frame... | ...new-stack-args... | RA ]
 
     // Transfer control to the callee. Do not use a call that pushes a return
     // address, that is already filled in. Just use a plain unconditional jump.
@@ -731,20 +762,15 @@ fn tail_call() {
 }
 ```
 
-By having callers write stack arguments past their `SP`, we can have stack
-arguments live in the callee's stack frame between `FP` and `SP`. This makes it
-easy for callees to clean up their own stack arguments in epilogues and tail
-calls by simply resetting `SP` to `FP`.
+Under this scheme, regular call paths should be exactly as performant as they
+are today. Tail calls will be as well, if they do not use stack arguments, or
+the tail caller and tail callee use the same number of stack arguments. Tail
+calls where there are different numbers of stack arguments will be penalized,
+however. Potentially fairly egregiously, since copying return addresses around
+on the stack can negatively interact with the processor's speculation.
 
-But writing stack arguments past `SP` does mean that stack probes need to
-account for this "red zone" beyond `SP` when checking if we have enough stack
-space for a call. This is fine, since in today's world that space is already in
-the caller frame, and we are "just" shrinking the caller frame and including the
-stack arguments in the callee frame, but ultimately we have the same amount of
-stack usage either way. We just have to take some care that we don't mess up the
-accounting.
-
-Consider the following functions:
+Now let's explore shuffling stack arguments within a frame during a tail
+call. Consider the following functions:
 
 ```rust
 fn f(...register_args, stack_arg_0, stack_arg_1) {
@@ -1145,29 +1171,9 @@ approaches that we could explore as well:
   requires dynamically checking whether a tail call is the first or not, which
   our proposed design avoids. It does make sense for SpiderMonkey, though, where
   there are more tiers of compilers that all need to agree with each other and
-  with the host. They have a lot more inertia than we do.
-
-* We could leave stack arguments before the return address and saved frame
-  pointer, and still have callees clean up the stack arguments. The previous
-  alternative design sort of implies this behavior, but it is worth exploring on
-  its own as well. The main problem here is that eventually the callee epilogue
-  is trying to clean up those stack arguments, but can't just pop them because
-  the return address is on top of them:
-
-  ```
-  [ ...caller-frame... | ...stack-args... | RA ]
-  ```
-
-  In general, this can be solved by copying the return address around, but this
-  has questionable interactions with hardware control-flow integrity features as
-  well as pessimizing speculation. Epilogues could also start to get lengthy, in
-  terms of how many instructions they contain, rather than remaining short,
-  tight sequences. x86 does actually have a form of `ret` where you can pass an
-  immediate that says how many additional bytes to pop from the stack after
-  popping the return address, and so it could avoid this particular downside,
-  but not all architectures have an equivalent. And why try to solve this
-  incidental problem when we have a viable alternative that side steps it
-  completely?
+  with the host, and there are more kinds of pinned registers and context to
+  switch, save, and restore between different types of calls. They have a lot
+  more inertia than we do.
 
 * We could do `push FP` in callers, not the callee prologue. This would let us
   implicitly compute the stack argument space's current capacity by comparing
@@ -1237,3 +1243,8 @@ approaches that we could explore as well:
 
 * Can we reuse, or fork, code from `regalloc2` to do parallel copies between
   stack arguments?
+
+* Is copying the return address between stack slots on tail calls (where we have
+  different numbers of stack arguments) incompatible with hardware control-flow
+  integrity features? I don't believe it conflicts with ARM's pointer
+  authentication scheme, but I'm less sure about Intel CET and its shadow stack.
