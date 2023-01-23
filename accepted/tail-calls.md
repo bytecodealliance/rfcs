@@ -734,7 +734,6 @@ fn tail_call() {
         compute_args_and_move_them_to_registers_and_stack_slots();
     }
 
-
     //                                                    FP                SP
     //                                                    |                 |
     //                                                    V                 V
