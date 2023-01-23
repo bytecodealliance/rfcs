@@ -488,7 +488,7 @@ responsible for cleaning up their own stack arguments.
     we can't have that interoperability anymore, so we can also switch to a
     single calling convention on x86-64. Yay, fewer variants to mantain!
 
-The other tricky case is when we have two function that are mutually recursive,
+The other tricky case is when we have two functions that are mutually recursive,
 and one of them has more stack arguments than the other:
 
 ```rust
@@ -522,9 +522,9 @@ caller, we can get into unbounded stack-growth failure modes like the following:
 * etc...
 
 The proposed design avoids dynamically tracking stack argument capacity by
-shrinking stack argument capacity on tail calls. This does mean that we may need
-to copy the return address to a new location on the stack when shrinking
-capacity, but it does let us avoid dynamic capacity checks.
+shrinking stack argument capacity on tail calls, if necessary. This does mean
+that we may need to copy the return address to a new location on the stack when
+shrinking capacity, but it does let us avoid dynamic capacity checks.
 
 With that out of the way, lets get into the details.
 
