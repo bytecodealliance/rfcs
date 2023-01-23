@@ -20,9 +20,9 @@ Add support for the WebAssembly tail calls proposal to Wasmtime by
 
 * adding new `return_call` and `return_call_indirect` CLIF instructions (similar
   to the Wasm instructions),
-* replacing the `wasmtime_*` calling conventions in Cranelift with new
-  `wasm_{x64,aarch64,etc...}` calling conventions where callees clean up their
-  caller's stack space (e.g. stack arguments),
+* replacing the `wasmtime_*` calling conventions in Cranelift with new `wasm`
+  calling convention where callees clean up their caller's stack space
+  (e.g. stack arguments),
 * and redesigning Wasmtime's system of trampolines between Wasm and the host
   such that we never chain trampolines.
 
@@ -466,19 +466,19 @@ caller and callee function signatures must use the new Wasm calling convention
 ## New Wasm Calling Conventions in Cranelift
 [proposal-calling-conventions]: #new-wasm-calling-conventions-in-cranelift
 
-We will define one new calling convention for each of our target
-architectures[^per-architecture]: `wasm_x64`, `wasm_aarch64`, and etc... The
-main difference from the native calling conventions will be that callees will
-clean up stack space for callers, regardless whether we are in a tail call or
-not. This is required because we need to clean up the stack arguments after
-exiting a function, and we no longer always exit a function by returning to the
-caller, we can also exit the function by tail calling to another function. In
-that new case, we can't delay cleaning up stack arguments until the last
-function in a tail call chain returns to the original caller. If every function
-in the tail call chain allocated stack arguments, this would lead to *O(n)*
-stack growth in the tail call chain, but we *must* maintain *O(1)* stack space
-for the whole chain. So callees must be responsible for cleaning up their own
-stack arguments.
+We will define one new calling convention for Wasm, the `wasm` calling
+convention, implemented for each of our target
+architectures[^per-architecture]. The main difference from the native calling
+conventions will be that callees will clean up stack space for callers,
+regardless whether we are in a tail call or not. This is required because we
+need to clean up the stack arguments after exiting a function, and we no longer
+always exit a function by returning to the caller, we can also exit the function
+by tail calling to another function. In that new case, we can't delay cleaning
+up stack arguments until the last function in a tail call chain returns to the
+original caller. If every function in the tail call chain allocated stack
+arguments, this would lead to *O(n)* stack growth in the tail call chain, but we
+*must* maintain *O(1)* stack space for the whole chain. So callees must be
+responsible for cleaning up their own stack arguments.
 
 [^per-architecture]: Yes, one calling convention per-architecture not one
     per-target. Currently Wasm compiled for x86-64 has a different calling
