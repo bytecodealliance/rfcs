@@ -1021,7 +1021,7 @@ This call path used to involve two trampolines, but now has only one!
 
 ### `array → array`
 
-The caller is a `wasmtime::Func::call` invocation adn teh callee is a
+The caller is a `wasmtime::Func::call` invocation and the callee is a
 `wasmtime::Func::new` host function. This doesn't cross into Wasm, so it doesn't
 need to save registers for stack walking, and the calling conventions match so
 it doesn't need any trampolines. The caller gets the callee function pointer
