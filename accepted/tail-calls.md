@@ -764,9 +764,8 @@ fn tail_call() {
 Under this scheme, regular call paths should be exactly as performant as they
 are today. Tail calls will be as well, if they do not use stack arguments, or
 the tail caller and tail callee use the same number of stack arguments. Tail
-calls where there are different numbers of stack arguments will be penalized,
-however. Potentially fairly egregiously, since copying return addresses around
-on the stack can negatively interact with the processor's speculation.
+calls where there are different numbers of stack arguments will be slightly
+penalized, however, because of the need to resize the stack argument capacity.
 
 Now let's explore shuffling stack arguments within a frame during a tail
 call. Consider the following functions:
@@ -1242,8 +1241,3 @@ approaches that we could explore as well:
 
 * Can we reuse, or fork, code from `regalloc2` to do parallel copies between
   stack arguments?
-
-* Is copying the return address between stack slots on tail calls (where we have
-  different numbers of stack arguments) incompatible with hardware control-flow
-  integrity features? I don't believe it conflicts with ARM's pointer
-  authentication scheme, but I'm less sure about Intel CET and its shadow stack.
