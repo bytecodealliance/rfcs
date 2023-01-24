@@ -1088,11 +1088,11 @@ Here is a rough check list of work needed to implement tail calls. Of course,
 plans often change when we get into the nitty gritty details, but this should be
 a reasonable set of incremental milestones we can work towards.
 
-* [ ] Add support for the tail calls proposal in `wasm-tools`:
+* [X] Add support for the tail calls proposal in `wasm-tools`:
   * [X] `wat` and `wast`
   * [X] `wasmparser`
   * [X] `wasm-encoder`
-  * [ ] `wasm-smith`
+  * [X] `wasm-smith`
 * [ ] Add `return_call` and `return_call_indirect` instructions to Cranelift
       (just instructions and validation; lowerings unimplemented)
 * [ ] Implement new calling conventions in Cranelift and implement lowerings for
