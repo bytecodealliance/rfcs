@@ -377,7 +377,7 @@ without good documentation on our part. However, it would be far
 better if we could provide a "How to Write a Backend" document. Note,
 also, that while the *direct* audience of such a document is fairly
 small, its indirect effect as a forcing-function for proper
-documetnation of backend architecture will also be quite helpful.
+documentation of backend architecture will also be quite helpful.
 
 ### Documentation Update Pass
 
