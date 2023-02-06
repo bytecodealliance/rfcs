@@ -248,7 +248,7 @@ aggregates data about the compilation process in order to help with
 debugging and performance tuning, and in general to improve compiler
 observability. The basic idea is to instrument the various passes and
 analyses of the compiler with updates to stats-counters for particular
-"events" or cases -- for example, every time a reundant instruction is
+"events" or cases -- for example, every time a redundant instruction is
 removed by GVN, or a rewrite rule fires, or a register is spilled --
 as well as measures of various data-structure and code sizes (number
 of basic-blocks, instructions, register liveranges, etc).
