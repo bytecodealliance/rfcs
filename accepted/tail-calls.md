@@ -1092,9 +1092,9 @@ a reasonable set of incremental milestones we can work towards.
   * [X] `wasmparser`
   * [X] `wasm-encoder`
   * [X] `wasm-smith`
-* [ ] Add `return_call` and `return_call_indirect` instructions to Cranelift
+* [X] Add `return_call` and `return_call_indirect` instructions to Cranelift
       (just instructions and validation; lowerings unimplemented)
-* [ ] Add support for `return_call` in the CLIF interpreter
+* [X] Add support for `return_call` in the CLIF interpreter
 * [ ] Implement new calling conventions in Cranelift and implement lowerings for
       `return_call[_indirect]` instructions
 * [ ] Update `VMCallerCheckedAnyfunc` and Wasmtime's trampolines to use multiple
