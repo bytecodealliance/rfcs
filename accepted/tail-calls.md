@@ -789,11 +789,31 @@ second stack argument after this. Swapping `stack_arg_0` and `stack_arg_1` needs
 to happen all at once. This is similar to the "parallel-copy problem" in SSA
 when implementing phis for control flow joins. We can initially start with a
 simple implementation that allocates more stack space for temporaries than
-necessary, and eventually replace it with a more-optimized version that keeps
-the number of copies and additional space overhead to a minimum. It's a pretty
-well-explored space, we just need to invest the engineering time once it becomes
-a priority to improve. Perhaps we can even reuse or copy-and-adapt `regalloc2`'s
-implementation.
+necessary, more on this below, and eventually replace it with a more-optimized
+version that keeps the number of copies and additional space overhead to a
+minimum. It's a pretty well-explored space, we just need to invest the
+engineering time once it becomes a priority to improve. Perhaps we can even
+reuse or copy-and-adapt `regalloc2`'s implementation.
+
+The simple parallel-copy implementation we can use for stack arguments is as
+follows:
+
+* we bump SP by the size of the callee's stack arguments,
+* copy the stack arguments into this newly-allocated stack space as if this
+  region were the callee's stack argument region,
+* we `memmove` this region into the actual stack argument region for the callee
+  (on top of our caller stack arguments),
+* and finally we reset SP to deallocate the temporary space for the copy of the
+  stack arguments that we made, and jump to the callee.
+
+All of these steps will be implemented by a single pre-regalloc vcode
+instruction that is generated when lowering `return_call[_indirect]`
+instructions. It needs to be a single instruction because regalloc cannot be
+allowed to insert spills or reloads in the middle of this sequence. This
+sequence invalidates the caller stack frame and regalloc-inserted reloads could
+be of an overwritten value and spills could overwrite stack arguments to the
+callee. This scheme is also careful to ensure that we never write past SP, which
+isn't supported on all platforms.
 
 You might also notice that, under the proposed design, tail calls essentially
 perform all the same steps that function epilogues do, and then the callee
