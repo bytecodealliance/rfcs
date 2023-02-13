@@ -480,13 +480,14 @@ arguments, this would lead to *O(n)* stack growth in the tail call chain, but we
 *must* maintain *O(1)* stack space for the whole chain. So callees must be
 responsible for cleaning up their own stack arguments.
 
-[^per-architecture]: Yes, one calling convention per-architecture not one
-    per-target. Currently Wasm compiled for x86-64 has a different calling
-    convention depending on if we are targeting Windows or Unix. That was
-    motivated by having the Wasm calling convention interoperable with the
-    host's native calling convention. Given that we have to support tail calls,
-    we can't have that interoperability anymore, so we can also switch to a
-    single calling convention on x86-64. Yay, fewer variants to mantain!
+[^per-architecture]: Yes, one implementation of the calling convention
+    per-architecture not one per-target. Currently Wasm compiled for x86-64 has
+    a different calling convention depending on if we are targeting Windows or
+    Unix. That was motivated by having the Wasm calling convention interoperable
+    with the host's native calling convention. Given that we have to support
+    tail calls, we can't have that interoperability anymore, so we can also
+    switch to a single calling convention on x86-64. Yay, fewer variants to
+    maintain!
 
 The other tricky case is when we have two functions that are mutually recursive,
 and one of them has more stack arguments than the other:
@@ -526,9 +527,23 @@ shrinking stack argument capacity on tail calls, if necessary. This does mean
 that we may need to copy the return address to a new location on the stack when
 shrinking capacity, but it does let us avoid dynamic capacity checks.
 
+We've worked out the specifics for x86-64 and have enough of a general idea for
+how to translate this into other architectures that we are comfortable moving
+forward with this RFC proposal, even if we don't have every last "t" crossed and
+"i" dotted. Therefore, many of the following bits are somewhat x86-64 specific,
+but this shouldn't be taken as prescribing that all architectures must match
+exactly what x86-64 does. Other architectures should do what is natural for
+them, so long as they preserve the spirit of this proposal and maintain the
+following two properties:
+
+1. The callee must clean up its own stack space and on-stack arguments, not
+   leave these things to the caller.
+2. We must maintain frame pointers (or backchains) for fast, DWARF-less stack
+   walking, as Wasmtime requires that functionality.
+
 With that out of the way, lets get into the details.
 
-The new Wasm calling conventions will use the frame layout in the following
+The new Wasm calling convention will use the frame layout in the following
 diagram. For exposition's sake, this diagram assumes that the pointer size is 64
 bits and that every stack argument and stack slot is pointer-sized. The actual
 implementation will not (for example) use a 64-bit slot for a 32-bit argument;
@@ -574,6 +589,16 @@ tail call). Additionally, because we still maintain frame pointer chains, we
 continue to support our fast stack walker, as well as any frame pointer-based
 stack walking tools that exist externally to Wasmtime (debuggers, profilers,
 etc...).
+
+Additionally, this diagram shows where return addresses are pushed on
+x86-64. Other architectures keep the return address in a register, and only
+spill it to the stack as register pressure increases or to follow system ABI
+conventions. When implementing this new calling convention for these
+architectures, we should not try and squeeze a square peg into a round hole by
+forcing them to follow x86-64's conventions. These architectures should instead
+take the approach that is natural for them, but follows the callee-pops spirit
+that makes the calling convention compatible with tail calls. The x86-64-style
+presentation is just for exposition.
 
 The following pseudocode for function prologues, epilogues, calls, and tail
 calls shows how we will maintain this frame layout:
