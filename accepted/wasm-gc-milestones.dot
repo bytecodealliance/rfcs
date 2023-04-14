@@ -1,0 +1,77 @@
+digraph {
+    rankdir = "LR";
+
+    {
+        rank = same;
+        wasmparser [label = "wasmparser"];
+        wasm_encoder [label = "wasm-encoder"];
+        wat [label = "wat and wast"];
+    }
+
+    {
+        rank = same;
+        wasm_smith [label = "wasm-smith"];
+    }
+    wasm_encoder -> wasm_smith;
+
+    {
+        rank = same;
+        func_refs [label = "function references in wasmtime"];
+    }
+
+    {
+        rank = same;
+        gc_interface [label = "pluggable gc interface"];
+    }
+
+    {
+        rank = same;
+        null_gc [label = "null gc"];
+    }
+    gc_interface -> null_gc [style = "dashed", label = "optional"];
+
+    {
+        rank = same;
+        public_api [label = "public api"];
+    }
+
+    {
+        rank = same;
+        spec_tests [label = "wasm gc spec tests passing"];
+    }
+    null_gc -> spec_tests;
+    func_refs -> spec_tests;
+    wasmparser -> spec_tests;
+    wat -> spec_tests;
+    public_api -> spec_tests;
+
+    {
+        rank = same;
+        spec_compliant [shape = "rectangle", label = "spec-compliant, experimental implementation"];
+    }
+    spec_tests -> spec_compliant;
+
+    {
+        rank = same;
+        general_purpose_gc [label = "general-purpose gc"];
+        pooling_gc [label = "pooling allocator gc"];
+    }
+    gc_interface -> general_purpose_gc;
+    gc_interface -> pooling_gc;
+
+    {
+        rank = same;
+        fuzz_target [label = "dedicated fuzz target"];
+    }
+    spec_tests -> fuzz_target;
+
+    {
+        rank = same;
+        prod_ready [shape = "rectangle", label = "production ready"];
+    }
+    spec_compliant -> prod_ready;
+    fuzz_target -> prod_ready;
+    wasm_smith -> prod_ready;
+    pooling_gc -> prod_ready;
+    general_purpose_gc -> prod_ready;
+}
