@@ -6,6 +6,7 @@
     * [Types](#types)
     * [Values](#values)
     * [Limitations of the Public API](#limitations-of-the-public-api)
+  * [Implementing `extern.externalize` and `extern.internalize`](#implementing-externexternalize-and-externinternalize)
   * [Defining the Pluggable GC Interface](#defining-the-pluggable-gc-interface)
     * [The `wasmtime_environ::GcCompiler` Trait](#the-wasmtime_environgccompiler-trait)
     * [The `wasmtime_runtime::GcRuntime` Trait](#the-wasmtime_runtimegcruntime-trait)
@@ -287,15 +288,13 @@ Function references will continue to be represented by `wasmtime::Func` and
 `wasmtime::TypedFunc`. External references will continue to be represented by
 `wasmtime::ExternRef`.
 
-The new `AnyRef` Rust type represents the Wasm super type for all internal data,
-which is currently `i31`s, `struct`s, and `array`s. Below `any` is `eq` which is
-the super type for all Wasm types that can be compared for equality. Currently,
-I believe that there are no instance of `any` that are not also instances of
-`eq`. I've sketched out what having separate `AnyRef` and `EqRef` types in Rust
-would look like, with the latter implementing `PartialEq` and `Eq`. However, I'm
-on the fence with regards to whether we should actually have two different types
-here, or collapse them and only have `AnyRef` and only implement `PartialEq` for
-it.
+The new `AnyRef` Rust type represents the Wasm super type for all internal
+data. Below `any` is `eq` which is the super type for all Wasm types that can be
+compared for equality, which are currently `i31`s, `struct`s, and `array`s. The
+only things which are `any` but not `eq` are `extern`s that have been
+"internalized". That is, while the `any` and `extern` type hierarchies are
+distinct, you can wrap one up as the other via the `extern.innternalize` and
+`extern.externalize` instructions.
 
 ```rust
 pub struct AnyRef {
@@ -511,10 +510,40 @@ containing a `wasmtime::{Struct,Array}Ref` that (transitively) holds onto that
 is always rooted, it keeps everything it can reach alive until dropped, and
 because there is a cycle it won't ever be dropped.
 
-This RFC proposes that we do not initially support these features. If there is
-sufficient demand and motivation, we can add a `GcTrace` trait and unrooted
-reference type later. There will be more design work to be done, but it won't
-fundamentally change any of the rest of this RFC's design.
+This RFC proposes that we do not initially support these features and not having
+them is acceptable for the time being. If and when there is sufficient demand
+and motivation, we can add a `GcTrace` trait and unrooted reference type
+later. There will be more design work to be done, but it won't fundamentally
+change any of the rest of this RFC's design.
+
+## Implementing `extern.externalize` and `extern.internalize`
+
+As mentioned earlier, these instructions bridge the distinct `any` and `extern`
+type hierarchies, allowing wrapping an external reference into an internal
+reference and vice versa. The following identities must hold:
+
+```
+my_extern == externalize(internalize(my_extern))
+my_intern == internalize(externalize(my_intern))
+```
+
+This means that when internalizing, we need to check whether the referent is a
+"regular" `externref` (in which case we need to wrap it) or a wrapped `anyref`
+masquerading as an `externref` (in which case we need to unwrap it). When
+externalizing we need to perform dual checks and operations.
+
+We can initially implement these instructions as libcalls, performing this
+wrapping and unwrapping in VM code. This way we can continue to use `dyn Any` to
+represent an `externref`'s inner data, and use `std::any::Any::is` and friends
+to check whether it is a wrapper around an internal reference or not. However,
+wrapping an `externref` into an internal reference will require a "hidden" type
+like `(struct (field externref))` that doesn't have an associated type section
+index and is solely an implementation detail of wrapping and unwrapping.
+
+In the fullness of time, we can emit inline code to implement these
+instructions. This will require a second "hidden" type to represent `externref`
+wrappers around an internal reference so that we don't rely on `dyn Any` which
+requires manipulation from Rust code.
 
 ## Defining the Pluggable GC Interface
 
@@ -1166,7 +1195,10 @@ the `externref`-heap because it is referenced by an `anyref` and the `anyref`
 would be rooted in the `anyref`-heap because it is referenced by that
 `externref`. But nothing else is referencing either of them, so the cycle is
 garbage, but we cannot collect it. Collecting it requires identifying the cycle,
-which requires a collector that sees both `externref`s and `anyref`s.
+which requires a collector that sees both `externref`s and `anyref`s. And
+because internal data can be "externalized" via the `extern.externalize`
+instruction, it is trivial for Wasm guests to create such cycles. So (1) is not
+a practical option.
 
 In addition to the above issue with cycles, to pay down tech debt and ultimately
 end up with the fewest moving parts, we should choose some variation of
@@ -1300,10 +1332,6 @@ From there, to get a production-ready implementation we will need:
   * return `None` (meaning that all these type accessors return `Option`s)
 
   ?
-
-* Should `AnyRef` and `EqRef` be collapsed together in the public API? Right now
-  they ultimately represent the exact same set of types, as I understand it, but
-  that may not always be the case given future proposals.
 
 * What exactly should `GcObjectLayout` and friends look like? Should they carry
   type information in addition to field offsets (which is sort of what it is
