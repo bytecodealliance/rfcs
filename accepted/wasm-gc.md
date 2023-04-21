@@ -456,19 +456,32 @@ GC-managed objects, instead they are essentially an index into a root set in the
 `wasmtime::{Struct,Array}Ref`s are currently pointing to it. Cloning a
 `wasmtime::{Struct,Array}Ref` bumps the count, while dropping it decrements the
 count. This needs to be an atomic reference count because `wasmtime::Store` must
-be `Send` to work with async. `wasmtime::{Struct,Array}Ref`'s indirection will
-be a slight hit to performance, but this okay because I expect that performance
-of Wasm accessing GC objects is a much larger concern than that of the host
-accessing GC objects, and it gives us the following properties:
+be `Send` to work with async. Altogether, this gives us the following desirable
+properties:
 
-* Updating pointers to GC objects (when we have a moving GC) is easy. We don't
-  need to figure out how to track `wasmtime::{Struct,Array}Ref`s on the stack
-  (which is hard without move constructors) or elsewhere in the native heap.
+* Updating pointers to GC objects (for moving GC) is easy. We don't need to
+  figure out how to track `wasmtime::{Struct,Array}Ref`s on the stack (which is
+  hard without move constructors) or elsewhere in the native heap.
 
 * We do *not* need to protect every object field access with locks and atomics
   because the `wasmtime::{Struct,Array}Ref` accessors take a store argument and,
   because neither stores nor `wasmtime::{Struct,Array}Ref`s are `Sync`, that is
   proof that they are on the same thread.
+
+However, even with this scheme to avoid synchronization, manipulating GC objects
+from the host will be slower than from Wasm, since
+
+* the host accesses objects through an indirection, while Wasm has raw GC object
+  pointers,
+
+* the host will be constantly rooting and unrooting GC objects as it traverses
+  their fields and array elements while the Wasm instead has stack maps for
+  identifying roots, and
+
+* the host doesn't have static type information while the Wasm does.
+
+But this okay because I expect that performance of Wasm accessing GC objects is
+a much larger concern than that of the host accessing GC objects.
 
 Similarly, the root set itself doesn't need a mutex because we only mutate it
 (other than its entries' ref counts, which have atomically-synchronized internal
@@ -481,7 +494,8 @@ either the next garbage collection or when the whole store is dropped.
 
 Altogether, this design for exposing reference values in the public API allows
 us to keep performance-degrading synchronization to a minimum while still
-providing a fully safe and relatively ergonomic API.
+providing a fully safe and relatively ergonomic API and simultaneously keeping
+Wasm manipulation of GC objects as fast as possible.
 
 ### Limitations of the Public API
 
