@@ -601,7 +601,8 @@ The `GcCompiler` trait is used when compiling Wasm code. We will add a
 trait FuncEnvironment {
     // <existing methods>
 
-    fn gc_compiler(&mut self) -> &mut dyn GcCompiler;
+    type Gc: GcCompiler;
+    fn gc_compiler(&mut self) -> &mut Self::Gc;
 }
 ```
 
