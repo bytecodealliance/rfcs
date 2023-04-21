@@ -307,7 +307,7 @@ impl TryFrom<AnyRef> for EqRef { /* ... */ }
 
 impl AnyRef {
     pub fn ref_type(&self) -> RefType { /* ... */ }
-    pub fn is_instance_of(&self, ty: RefType) -> bool { /* ... */ }
+    pub fn is_instance_of(&self, store: impl AsContext, ty: RefType) -> bool { /* ... */ }
     pub fn is_null(&self) -> bool { /* ... */ }
 
     pub fn is_eq_ref(&self) -> bool { */ ... */ }
@@ -332,7 +332,7 @@ impl TryFrom<EqRef> for ArrayRef { /* ... */ }
 
 impl EqRef {
     pub fn ref_type(&self) -> RefType { /* ... */ }
-    pub fn is_instance_of(&self, ty: RefType) -> bool { /* ... */ }
+    pub fn is_instance_of(&self, store: impl AsContext, ty: RefType) -> bool { /* ... */ }
     pub fn is_null(&self) -> bool { /* ... */ }
 
     pub fn is_i31_ref(&self) -> bool { */ ... */ }
@@ -397,7 +397,7 @@ impl StructRef {
 
     pub fn is_null(&self) -> bool { /* ... */ }
     pub fn struct_type(&self) -> StructType { /* ... */ }
-    pub fn is_instance_of(&self, ty: StructType) -> bool { /* ... */ }
+    pub fn is_instance_of(&self, store: impl AsContext, ty: StructType) -> bool { /* ... */ }
 
     pub fn get(&self, store: impl AsContextMut, field: u32) -> Result<Val> { /* ... */ }
     pub fn set(&self, store: impl AsContextMut, field: u32, value: Val) -> Result<()> { /* ... */ }
@@ -428,7 +428,7 @@ impl ArrayRef {
 
     pub fn is_null(&self) -> bool { /* ... */ }
     pub fn array_type(&self) -> ArrayType { /* ... */ }
-    pub fn is_instance_of(&self, ty: ArrayType) -> bool { /* ... */ }
+    pub fn is_instance_of(&self, store: impl AsContext, ty: ArrayType) -> bool { /* ... */ }
 
     pub fn len(&self, store: impl AsContext) -> u32 { /* ... */ }
     pub fn get(&self, store: impl AsContextMut, elem: u32) -> Result<Val> { /* ... */ }
