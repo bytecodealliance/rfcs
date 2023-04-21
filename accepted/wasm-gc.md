@@ -173,9 +173,9 @@ impl FunctionType {
         // ...
     }
 
-    pub fn params(&self, engine: &Engine) -> Arc<[ValType]> { /* ... */ }
+    pub fn params<'engine>(&self, engine: &'engine Engine) -> &'engine [ValType] { /* ... */ }
 
-    pub fn results(&self, engine: &Engine) -> Arc<[ValType]> { /* ... */ }
+    pub fn results<'engine>(&self, engine: &'engine Engine) -> &'engine [ValType] { /* ... */ }
 }
 
 pub struct StructType(u32);
@@ -188,7 +188,7 @@ impl StructType {
         // ...
     }
 
-    pub fn fields(&self, engine: &Engine) -> Arc<[FieldType]> { /* ... */ }
+    pub fn fields<'engine>(&self, engine: &'engine Engine) -> &'engine [FieldType] { /* ... */ }
 }
 
 // (These types follow directly from the Wasm GC proposal, but are included for
