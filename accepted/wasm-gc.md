@@ -420,7 +420,7 @@ impl ArrayRef {
 
     pub fn new(
         store: impl AsContextMut,
-        ty: StructType,
+        ty: ArrayType,
         elements: impl Iterator<Item = Val>,
     ) -> Result<ArrayRef> {
         // ...
