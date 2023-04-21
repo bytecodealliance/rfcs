@@ -443,7 +443,7 @@ reclaimed, or otherwise recycled for new instances once the store and its Wasm
 instances are dropped. Therefore, these methods cannot simply dereference
 pointers to their underlying objects, they need to assert that the given context
 is the same store that their object came from, which means the referenced object
-is still live, because `wasmtime::Ref`s always root there referent.
+is still live, because `wasmtime::Ref`s always root their referent.
 
 With regards to performance, the biggest concern is synchronization, since
 stores can be sent between threads. We really want the minimum of
