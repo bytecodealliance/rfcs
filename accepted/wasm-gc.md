@@ -424,6 +424,18 @@ impl ArrayRef {
     pub fn new(
         store: impl AsContextMut,
         ty: ArrayType,
+        fill_value: Val,
+    ) -> Result<ArrayRef> {
+        // ...
+    }
+
+    pub fn new_default(store: impl AsContextMut, ty: ArrayType) -> Result<ArrayRef> {
+        // ...
+    }
+
+    pub fn from_elements(
+        store: impl AsContextMut,
+        ty: ArrayType,
         elements: impl Iterator<Item = Val>,
     ) -> Result<ArrayRef> {
         // ...
