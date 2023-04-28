@@ -834,7 +834,9 @@ runtime. It looks very similar to `GcCompiler`, except that instead of emitting
 code to perform various operations, it just performs the operations directly. It
 provides a few fundamental pieces of functionality:
 
-1. Performing garbage collections.
+1. Performing garbage collections. (Optionally in an async manner, where the
+   collector yields every X duration, to avoid blocking other work in a
+   concurrent system.)
 
 2. Allocating new GC-managed objects.
 
@@ -887,6 +889,16 @@ pub trait GcRuntime {
     ///
     /// * `roots`: The set of GC roots.
     unsafe fn gc(&self, heap: GcHeap, roots: RootSet);
+
+    /// Like `GcRuntime::gc` but asynchronous.
+    ///
+    /// The mutator will not run during yields.
+    unsafe fn async_gc(
+        &self,
+        heap: GcHeap,
+        roots: RootSet,
+        yield_every: std::time::Duration,
+    ) -> Box<dyn Future<Output = ()>>;
 
     /// Allocate a new object.
     ///
