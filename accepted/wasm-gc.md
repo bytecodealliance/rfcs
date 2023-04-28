@@ -353,8 +353,8 @@ Note that the `into_*_ref` methods avoid reference counting operations. More one
 this below.
 
 `I31Ref` allows getting its inner 31-bit value as either a signed `i32` or
-unsigned `u32` and creation from those types as well (with a check that the
-value fits in 31 bits):
+unsigned `u32` and creation from those types as well (optionally checking that
+the value fits in 31 bits or else masking the value to 31 bits):
 
 ```rust
 pub struct I31Ref {
@@ -367,6 +367,9 @@ impl Eq for I31Ref { /* ... */ }
 impl I31Ref {
     pub fn signed(x: i32) -> Option<I31Ref> { /* ... */ }
     pub fn unsigned(x: u32) -> Option<I31Ref> { /* ... */ }
+
+    pub fn signed_masked(x: i32) -> I31Ref { /* ... */ }
+    pub fn unsigned_masked(x: u32) -> I31Ref { /* ... */ }
 
     pub fn get_signed(&self) -> i32 { /* ... */ }
     pub fn get_unsigned(&self) -> u32 { /* ... */ }
