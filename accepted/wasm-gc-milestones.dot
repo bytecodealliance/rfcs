@@ -53,10 +53,8 @@ digraph {
 
     {
         rank = same;
-        general_purpose_gc [label = "general-purpose gc"];
         pooling_gc [label = "pooling allocator gc"];
     }
-    gc_interface -> general_purpose_gc;
     gc_interface -> pooling_gc;
 
     {
@@ -73,5 +71,4 @@ digraph {
     fuzz_target -> prod_ready;
     wasm_smith -> prod_ready;
     pooling_gc -> prod_ready;
-    general_purpose_gc -> prod_ready;
 }

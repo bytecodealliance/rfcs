@@ -12,7 +12,6 @@
     * [The `wasmtime_runtime::GcRuntime` Trait](#the-wasmtime_runtimegcruntime-trait)
   * [GC Implementations](#gc-implementations)
     * [The Null GC](#the-null-gc)
-    * [A General-Purpose GC](#a-general-purpose-gc)
     * [The Pooling Allocator-Integrated Collector](#the-pooling-allocator-integrated-collector)
   * [What about the existing deferred reference-counting collector?](#what-about-the-existing-deferred-reference-counting-collector)
   * [Fuzzing Wasm GC](#fuzzing-wasm-gc)
@@ -1096,19 +1095,23 @@ call and add this scheme later if performance becomes a concern.
 
 ## GC Implementations
 
-We will have three GC implementations:
+We will have two GC implementations:
 
 1. The null GC, which allocates until it runs out of heap space, at which
    point it triggers a trap in the guest.
 
-2. A general-purpose collector, built on top of an off-the-shelf GC library.
-
-3. A collector designed for tight-integration with our pooling allocator and its
+2. A collector designed for tight-integration with our pooling allocator and its
    particular requirements.
 
 Each collector will have a Cargo feature to enable or disable its availability
 at compile time, so that `wasmtime` crate users don't have to pay for things
 they won't use in terms of compile time.
+
+In the future, if there is demand for a general-purpose collector with a
+nursery, compaction, and all that, we can consider adding a third collector. The
+`GcRuntime` and `GcCompiler` traits should ensure that doing so will require
+minimal changes to the rest of Wasmtime. At that time we can evaluate whether we
+want to use an off-the-shelf library like MMTK or develop our own.
 
 ### The Null GC
 
@@ -1123,29 +1126,6 @@ Note that while the null GC is "leaking" memory across a particular Wasm
 instance's lifetime, it should not leaking memory across the whole OS process's
 lifetime. When the instance's store is dropped, we will drop the null GC's heap
 along with it.
-
-### A General-Purpose GC
-
-Implementing a general-purpose collector that works well for many different
-workloads is a humongous engineering task. You'll want a generational garbage
-collector, concurrent collection with the mutator, parallel tracing, background
-sweeping, and more. It is such a large task that it is not something I feel
-comfortable with the Wasmtime project committing itself to. Luckily,
-off-the-shelf GC libraries exist.
-
-The GC library that has been around the longest (to my knowledge) and is
-arguably also the most mature is the [Boehm-Demers-Weiser
-GC](https://www.hboehm.info/gc/). It is implemented in C. There are two crates
-providing Rust bindings to it, but neither seems to be used in anger by anyone
-or particularly mature and battle-hardened.
-
-There are also a variety of libraries implemented in Rust that provide GC, but
-most are experiments; they are not mature or production-ready. The exception is
-[MMTK](https://www.mmtk.io/). It is receiving active development and
-[research](https://users.cecs.anu.edu.au/~steveb/pubs/papers/lxr-pldi-2022.pdf),
-and is built by some of the world's foremost experts in garbage collection. It
-is the obvious choice. This RFC proposes that we use an off-the-shelf collector
-from MMTK to implement Wasmtime's default, general-purpose GC.
 
 ### The Pooling Allocator-Integrated Collector
 
@@ -1217,6 +1197,11 @@ semi-space copying collector. However, confining free lists and mark bits within
 the pre-allocated memory reservation, while possible, would be a very much
 larger engineering task.
 
+It is tempting to reach for an off-the-shelf GC library but our above
+requirements are very specific and it is unlikely we will be able to use an
+off-the-shelf library for our needs without a lot of trouble and impedance
+mismatch.
+
 ## What about the existing deferred reference-counting collector?
 
 We implemented deferred reference counting (without cycle collection) for our
@@ -1228,9 +1213,8 @@ existing `externref` support. Moving forward we have two options:
    1. And port the deferred reference-counting collector to the proposed GC
       interface (and, presumably, also grow a cycle collector) and manage both
       `externref`s and `anyref`s with it.
-   2. Remove the deferred reference-counting collector in favor of the either
-      the off-the-shelf, general-purpose GC or the pooling allocator's
-      semi-space copying collector.
+   2. Remove the deferred reference-counting collector in favor of the other GC
+      backends.
 
 A perhaps-nonobvious implication of option (1) is that cycles between
 `externref`s and `anyref`s will always leak. The `externref` would be rooted in
@@ -1327,7 +1311,6 @@ From there, to get a production-ready implementation we will need:
 * [ ] Wasm GC support in `wasm-smith`
 * [ ] The dedicated fuzzer for exercising Wasm GC
 * [ ] The pluggable GC interface
-* [ ] The general-purpose GC, built with an off-the-shelf collector from MMTK
 * [ ] The semi-space copying collector with tight pooling-allocator integration
 
 # Rationale and Alternatives
@@ -1358,6 +1341,17 @@ From there, to get a production-ready implementation we will need:
   implementation and try and make it general-purpose enough to work for all
   workloads and fit tightly within the pooling allocator's constraints. Doing
   both at the same time seems like an exceedingly hard engineering problem.
+
+* We could start with implementing a general-purpose GC (either our own, as
+  considered in the previous bullet point, or with an off-the-shelf library like
+  MMTK). But either way we need to additionally implement a collector that
+  tightly integrates with the pooling allocator, and no stakeholder has been
+  clamoring for a general-purpose collector right now, so we might as well slim
+  down our initial work plans for now. This lets us avoid effectively
+  unauditable dependencies, at least for the time being. Note that it should
+  still be easy to add in the future, should we want to, since the design of the
+  pluggable GC API separates the collector from the rest of the runtime and
+  prevents entangling the runtime with any particular single collector.
 
 # Open Questions
 [open-questions]: #open-questions
