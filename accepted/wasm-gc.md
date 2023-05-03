@@ -256,13 +256,16 @@ Wasm type hierarchies:
 pub enum Val {
     // <existing variants>
 
+    // Non-nullable references.
     Ref(Ref),
+    // Nullable references.
+    RefNull(Option<Ref>),
 }
 
 pub enum Ref {
     Internal(AnyRef),
-    External(Option<ExternRef>),
-    Function(Option<Func>),
+    External(ExternRef),
+    Function(Func),
 }
 
 impl From<AnyRef> for Ref { /* ... */ }
@@ -293,7 +296,7 @@ data. Below `any` is `eq` which is the super type for all Wasm types that can be
 compared for equality, which are currently `i31`s, `struct`s, and `array`s. The
 only things which are `any` but not `eq` are `extern`s that have been
 "internalized". That is, while the `any` and `extern` type hierarchies are
-distinct, you can wrap one up as the other via the `extern.innternalize` and
+distinct, you can wrap one up as the other via the `extern.internalize` and
 `extern.externalize` instructions.
 
 ```rust
@@ -306,13 +309,18 @@ impl From<EqRef> for AnyRef { /* ... */ }
 impl TryFrom<AnyRef> for EqRef { /* ... */ }
 
 impl AnyRef {
-    pub fn ref_type(&self) -> RefType { /* ... */ }
-    pub fn is_instance_of(&self, store: impl AsContext, ty: RefType) -> bool { /* ... */ }
-    pub fn is_null(&self) -> bool { /* ... */ }
+    pub fn heap_type(&self) -> HeapType { /* ... */ }
+    pub fn is_instance_of(&self, store: impl AsContext, ty: HeapType) -> bool { /* ... */ }
 
     pub fn is_eq_ref(&self) -> bool { */ ... */ }
     pub fn as_eq_ref(&self) -> Option<EqRef> { /* ... */ }
     pub fn into_eq_ref(self) -> Option<EqRef> { /* ... */ }
+
+    pub fn externalize(self, store: impl AsContextMut) -> ExternRef { /* ... */ }
+}
+
+impl ExternRef {
+    pub fn internalize(self, store: impl AsContextMut) -> AnyRef { /* ... */ }
 }
 
 pub struct EqRef {
@@ -331,9 +339,8 @@ impl TryFrom<EqRef> for StructRef { /* ... */ }
 impl TryFrom<EqRef> for ArrayRef { /* ... */ }
 
 impl EqRef {
-    pub fn ref_type(&self) -> RefType { /* ... */ }
-    pub fn is_instance_of(&self, store: impl AsContext, ty: RefType) -> bool { /* ... */ }
-    pub fn is_null(&self) -> bool { /* ... */ }
+    pub fn heap_type(&self) -> HeapType { /* ... */ }
+    pub fn is_instance_of(&self, store: impl AsContext, ty: HeapType) -> bool { /* ... */ }
 
     pub fn is_i31_ref(&self) -> bool { */ ... */ }
     pub fn as_i31_ref(&self) -> Option<I31Ref> { /* ... */ }
@@ -388,8 +395,6 @@ impl PartialEq for StructRef { /* ... */ }
 impl Eq for StructRef { /* ... */ }
 
 impl StructRef {
-    pub fn null(ty: StructType) -> StructRef { /* ... */ }
-
     pub fn new(
         store: impl AsContextMut,
         ty: StructType,
@@ -398,7 +403,6 @@ impl StructRef {
         // ...
     }
 
-    pub fn is_null(&self) -> bool { /* ... */ }
     pub fn struct_type(&self) -> StructType { /* ... */ }
     pub fn is_instance_of(&self, store: impl AsContext, ty: StructType) -> bool { /* ... */ }
 
@@ -419,8 +423,6 @@ impl PartialEq for ArrayRef { /* ... */ }
 impl Eq for ArrayRef { /* ... */ }
 
 impl ArrayRef {
-    pub fn null(ty: ArrayType) -> ArrayRef { /* ... */ }
-
     pub fn new(
         store: impl AsContextMut,
         ty: ArrayType,
@@ -441,7 +443,6 @@ impl ArrayRef {
         // ...
     }
 
-    pub fn is_null(&self) -> bool { /* ... */ }
     pub fn array_type(&self) -> ArrayType { /* ... */ }
     pub fn is_instance_of(&self, store: impl AsContext, ty: ArrayType) -> bool { /* ... */ }
 
