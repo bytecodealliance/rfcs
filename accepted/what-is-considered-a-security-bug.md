@@ -34,7 +34,7 @@ Additionally, knowing what is not considered a security vulnerability by the
 Wasmtime developers, but could nevertheless potentially be leveraged by
 attackers, helps Wasmtime embedders design and architect their applications
 appropriately. Resuming the above example, if the Wasmtime developers chose not
-to consider Wasm compilation that fils to terminate as a security vulnerability
+to consider Wasm compilation that fails to terminate as a security vulnerability
 and advertised that fact, then the Wasmtime embedders might architect their
 application to compile Wasm in a separate OS process. This way they can apply a
 timeout to compilation and simply kill the process if it hangs.
