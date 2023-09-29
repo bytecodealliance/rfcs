@@ -55,6 +55,11 @@ Wasmtime book][book].
 
 ## Definition
 
+Bugs must affect [a tier 1 platform or feature][tiers] to be considered a
+security vulnerability.
+
+[tiers]: https://docs.wasmtime.dev/stability-tiers.html
+
 The security of the host and integrity of the sandbox when executing Wasm is
 paramount. Anything that undermines the Wasm execution sandbox is a security
 vulnerability.
