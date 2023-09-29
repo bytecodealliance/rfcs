@@ -26,8 +26,8 @@ sandbox. However, an attacker might be able to leverage this into a denial of
 service against a particular Wasmtime embedding, and the embedders might
 therefore reasonably consider these hangs in Wasmtime a security vulnerability.
 
-These differences in assumptions can lead to friction between the two groups and
-damaged working relationships. We would like to avoid that and foster healthy
+These differences in assumptions can create friction between the two groups and
+damage working relationships. We would like to avoid that and foster healthy
 collaboration between all stakeholders in the Wasmtime project.
 
 Additionally, knowing what is not considered a security vulnerability by the
