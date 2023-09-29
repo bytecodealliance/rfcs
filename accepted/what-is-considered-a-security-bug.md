@@ -172,5 +172,5 @@ page](https://docs.wasmtime.dev/security.html).
 * Are we missing anything from our definition of what is a security
   vulnerability?
 
-* Are there other kinds of bugs that we don't consider security vulneranilities
+* Are there other kinds of bugs that we don't consider security vulnerabilities
   but should explicitly mention that?
