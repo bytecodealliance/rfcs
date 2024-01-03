@@ -1291,7 +1291,7 @@ To get a spec-compliant, but experimental, implementation in Wasmtime we need:
 * [ ] To [finish implementing the function references
   proposal](https://github.com/bytecodealliance/wasmtime/pull/5288), as Wasm GC
   builds on top of it.
-* [ ] Implement support for parsing and validating Wasm GC in `wasmparser`.
+* [x] Implement support for parsing and validating Wasm GC in `wasmparser`.
 * [X] Implement support for Wasm GC in `wat` and `wast`. (Note: this is already
       done!)
 * [ ] Implement an initial version of the null GC. We can either block on the
@@ -1307,7 +1307,7 @@ To get a spec-compliant, but experimental, implementation in Wasmtime we need:
 
 From there, to get a production-ready implementation we will need:
 
-* [ ] Wasm GC support in `wasm-encoder`
+* [x] Wasm GC support in `wasm-encoder`
 * [ ] Wasm GC support in `wasm-smith`
 * [ ] The dedicated fuzzer for exercising Wasm GC
 * [ ] The pluggable GC interface
