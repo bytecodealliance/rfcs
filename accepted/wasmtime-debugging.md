@@ -31,7 +31,7 @@ following principles:
    programs running within it.
 
 3. **Leverage Wasm’s Strengths:** We want to leverage, for example, the
-   relatively non-deterministic nature of Wasm execution to enable compelling
+   relatively deterministic nature of Wasm execution to enable compelling
    debugging features like post-mortem debugging a failure from production
    locally, deterministic record and replay, and time-travel debugging. We
    should be able to take advantage of Wasm’s clear state boundaries and lack of
