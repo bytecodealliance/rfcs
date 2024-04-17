@@ -129,9 +129,8 @@ rather than the user experience of debugging programs. In addition to the
 features we outline in the [Live Debugging](#live-debugging) section below, the
 DAP supports debugging debuggees that cannot step or set breakpoints (such as
 core dumps) and debuggees that can reverse step (such as time-traveling while
-replaying a recorded trace). Many other debugging protocols do not have these
-features. Given all these things, we have good support for principle (1):
-providing a smooth developer experience.
+replaying a recorded trace). Given the richness of the DAP, we have good support
+for principle (1): providing a smooth developer experience.
 
 While there are some existing crates that implement support for the Debug
 Adapter Protocol, the breadth of selection that we would have available for
@@ -194,10 +193,10 @@ program execution and wait for user input prior to executing a specific line of
 code. The way this is handled in native debuggers is as follows:
 
 * When a user sets a breakpoint, the instruction corresponding to that line of
-  code is replaced with an `int3` instruction.
+  code is replaced with a debug trap instruction (like `int3` on `x86`).
 
-* When executed, the `int3` instruction raises a `SIGTRAP`, halting execution
-  and yielding control back to the debugger.
+* When executed, the debug trap instruction halts execution and yields control
+  back to the debugger.
 
 This approach leads to a problem for us: we only have one compiled copy of a
 module’s code, even though multiple instances may be running the code. So if we
@@ -287,6 +286,14 @@ outlined above:
   simplify tracking local locations, while the former would greatly increase the
   amount of context we would need to pass into the utility function for
   inspecting the execution state.
+
+Finally, using Winch over Cranelift for debugging will bring with it a
+deoptimized runtime experience. We believe that this is an acceptable tradeoff,
+as we're debugging the semantics of the WASM program, not the specifics of the
+Cranelift or Winch generated code. Leveraging this assumption a bit more, we can
+rely on features like record an replay to improve the debugging loop, recording
+a trace with optimized code produced by Cranelift and replaying to the point of
+the bug in Winch for interactive debugging.
 
 # Future Work
 
@@ -449,10 +456,10 @@ clunky and the implementation difficult.
 
 Instead of inserting calls to a utility function to check for breakpoints set at
 a specific instruction, we could insert `nop` instructions. Those `nop`
-instructions would be overwritten with `int3` instructions to generate `SIGTRAP`
-when executed, allowing us to then make a decision about either continuing if
-the execution was from an unrelated instance, or actually pausing execution and
-yielding control to the debugger.
+instructions would be overwritten with debug trap instructions to generate
+`SIGTRAP` when executed, allowing us to then make a decision about either
+continuing if the execution was from an unrelated instance, or actually pausing
+execution and yielding control to the debugger.
 
 One significant complication here would be passing the metadata required by the
 breakpoint handler is no longer as simple: we would need to recover that
