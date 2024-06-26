@@ -68,6 +68,14 @@ sacrifice our main goals for:
   module, after which it can enjoy both low-latency instantiation as well as
   improved execution throughput.
 
+* **Dynamically "tiering up" from the interpreter to the compiler:** As a follow
+  up to the last non-goal, because this interpreter is not designed for
+  minimizing start up times, it is also not intended to be used as an initial
+  tier for starting Wasm execution quickly while waiting for our optimizing
+  compiler to finish compiling the Wasm in the background, and then dynamically
+  switching execution from the interpreter to the compiled code, once it's
+  ready.
+
 * **Being the very fastest interpreter in the world:** Finally, we will not aim
   to create the world's very fastest interpreter; doing so involves
   [implementing the interpreter's opcode-switch loop in hand-written
