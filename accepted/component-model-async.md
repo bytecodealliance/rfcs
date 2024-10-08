@@ -214,14 +214,13 @@ neither of those methods allow guest-level concurrency, so they would only make
 sense in cases where the host can complete the task without blocking or
 `await`ing.
 
-For the above reasons, I propose that, once the `component-async` feature is
-enabled by default, we _deprecate_ `func_wrap_async` and modify the `bindgen!`
-macro to stop using it by default (but still allow opting in to it via an option
-during the deprecation period).  Rationale: a host function which needs to
-`await` must account for the possibility the it has been called via an
-async-lowered import and thus should not block the host _or_ the guest.
-Conversely, a host function which is always non-blocking might as well use plain
-old `func_wrap`.
+For the above reasons, I propose that, once the `component-async` feature
+is enabled by default, we _deprecate_ `func_wrap_async` and modify the
+`bindgen!` macro to stop using it by default (but still allow opting in to it
+via an option during the deprecation period).  Rationale: host functions which
+need to `await` must account for the possibility the it has been called via an
+async-lowered import and thus should not block the host _or_ the guest.  And
+host functions which are non-blocking might as well use plain old `func_wrap`.
 
 On the other hand, there's no particular reason to deprecate `call_async`, which
 may be more convenient than `call_concurrent` when the embedder only needs to
