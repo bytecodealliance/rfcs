@@ -105,7 +105,7 @@ The changes required to `wasm-tools` are generally straightforward additions:
 - `wit-component` support for "componentizing" a module which uses the above
 - `wit-parser` additions to represent `stream`s, `future`s, and `error`s.  Note
   that `wit-parser` already has minimal support for representing `stream`s and
-  `future`s, but those representation reflect an older, now-obsolete proposal,
+  `future`s, but those representations reflect an older, now-obsolete proposal,
   so we'll need to make some updates.
 - `wasmprinter` and `wat` support for WAT<->binary conversion
 - `wasm-smith`/`wit-smith` support for test case generation (although this might
