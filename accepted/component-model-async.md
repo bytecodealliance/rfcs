@@ -148,22 +148,20 @@ For the Rust generator, we'll add an `async` option to the `generate!` macro
 be generated as `async` functions, e.g.:
 
 ```rust
+/// Specified which imports and/or exports should be async
+///
+/// Functions not explicitly listed here will be generated as synchronous bindings.
 #[derive(Default, Debug, Clone)]
-pub enum AsyncConfig {
-    /// No async imports or exports (i.e. all synchronous)
-    #[default]
-    None,
-    /// Only the specified imports and/or exports will be async
-    Some {
-        /// List of fully-qualified import names (e.g. `wasi:http/types@0.3.0-draft#[static]body.finish`)
-        imports: HashSet<String>,
-        /// List of fully-qualified export names (e.g. `wasi:http/handler@0.3.0-draft#handle`)
-        exports: HashSet<String>,
-    },
-    /// All imports and exports will be async
-    All,
+pub struct AsyncConfig {
+    /// List of fully-qualified import names (e.g. `wasi:http/types@0.3.0-draft#[static]body.finish`)
+    imports: HashSet<String>,
+    /// List of fully-qualified export names (e.g. `wasi:http/handler@0.3.0-draft#handle`)
+    exports: HashSet<String>,
 }
 ```
+
+Note that the `nonblocking` function attribute proposal should allow the user to
+avoid configuring this explicitly.
 
 In addition, we'll bundle an `async_support` module containing the following:
 
@@ -516,42 +514,21 @@ they're just opaque handles.
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-- Instead of implementing the component model async ABI, we could consider a
-  more minimal approach to composable concurrency that interoperates with
-  `wasi:io@0.2.x`.  That's the approach I took with
-  [isyswasfa](https://github.com/dicej/isyswasfa), which uses lightly modified
-  guest and host binding generators and helper libraries to build on top of the
-  features Wasmtime and `wasm-tools` already provide.  However, there are
-  limitations to that approach:
-    - It's based on an ad-hoc convention for importing and exporting async
-      functions which would need to be standardized anyway, so why not make it
-      part of the component model?
-    - A convention that's only visible to binding generators would be invisible
-      to any other WIT/WAT/Wasm tooling, resulting in an awkward user
-      experience.
-    - `isyswasfa` does not provide a solution for guest languages based on
-      stackful couroutines or fibers; adding that support would result in a
-      system of comparable complexity to the CM async ABI -- and might not be
-      possible to implement without at least _some_ modifications to Wasmtime
-      and/or else making the core stack switching proposal a prerequisite.
-    - As described above `wasi:io` causes serious headaches for virtualization,
-      as well as being limited to `u8` streams.  It was always meant as a
-      temporary measure rather than a foundation for more sophisticated
-      abstractions.
 - As noted above, the problem of interleaving unique `Store` references with
-  `Future`s and the rest of Rust's `async` machinery has results in some pretty
+  `Future`s and the rest of Rust's `async` machinery results in some pretty
   awkward APIs.  I've tried to minimize the changes to Wasmtime as much as
-  possible, but perhaps it's time for a more comprehensive refactor of the
-  `wasmtime` crate and API with both guest-level concurrency and thread-based
-  parallelism in mind.
-- Finally, it could be argued that supporting concurrency beyond the scope of
-  what WASIp2 provides is simply not worth the complexity, in which case we
-  could consider:
-    - Doing nothing -- stick with `wasi:io` and make the best of it
-    - Revisit the async ABI design with an eye to simplifying it.  Note that any
-      discussion along those lines should probably happen in the [component
-      model repo](https://github.com/WebAssembly/component-model) rather than
-      here.
+  possible, but perhaps this calls for a refactor of the `wasmtime` crate and
+  API with both guest-level concurrency and thread-based parallelism in mind --
+  one which enables a more ergonomic async/stream/future API.
+- The host APIs for `stream`s described above deals with `Vec<T>` types.  We
+  could optimize that API and implementation by using slices instead to avoid
+  allocation overhead while still minimizing copies.  Ideally, we'd provide an
+  API for true zero-copy I/O via e.g. `io_uring` such that bytes are delivered
+  directly to a guest's linear memory, but that will require more thought and
+  can always be added leter.
+  
+In general, the details of the implementation can always be refined once we've
+established a sane public API.
 
 # Open questions
 [open-questions]: #open-questions
