@@ -329,7 +329,7 @@ impl Func {
 ///
 /// Unlike a `Future`, instances of this type may make progress without being
 /// polled directly.
-struct Promise<T> { ... }
+struct Promise<T> {}
 
 impl<T> Promise<T> {
     /// Convert this instance into a `Future` which may be `await`ed until the
@@ -343,7 +343,8 @@ impl<T> Promise<T> {
     ) -> impl Future<Output = T> + Send + 'a
     where
         T: Send,
-    { ... }
+    {
+    }
 
     /// Convert the specified `Promise`s into a `Future` which may be `await`ed
     /// until one or more of the `Promise`s resolve.
@@ -356,10 +357,11 @@ impl<T> Promise<T> {
     ) -> impl Future<Output = (Vec<T>, Vec<Promise<T>>)> + Send + 'a
     where
         T: Send,
-    { ... }
+    {
+    }
 
     /// Map the output of the specified promise to another type.
-    fn map<V>(self, fun: impl FnOnce(T) -> V) -> Promise<V> { ... }
+    fn map<V>(self, fun: impl FnOnce(T) -> V) -> Promise<V> {}
 }
 ```
 
