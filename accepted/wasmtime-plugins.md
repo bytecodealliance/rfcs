@@ -59,14 +59,29 @@ In order to address the lack of WebAssembly adoption in third-party libraries, l
 
 ### Interface
 
-Core functionality, extracted from https://github.com/rvolosatovs/wasi-dl/blob/59136630adc3b4c5cd69714d3446180d790cab73/wit/dl.wit looks as follows:
+Core functionality, extracted from https://github.com/rvolosatovs/wasi-dl/blob/6d2000d92d96b0967eb5a7ead314a765b7f596e2/wit/dl.wit looks as follows:
 
 ```wit
 package wasi:dl@0.2.0-draft;
 
 interface ffi {
     resource alloc {
-        new: static func(types: list<ffi-type>) -> result<alloc>;
+        new: static func(types: ffi-type) -> result<alloc>;
+
+        // Read and write accessors
+    }
+
+    enum primitive-type {
+        // Primitive C types
+    }
+
+    resource struct-type {
+        constructor(fields: list<ffi-type>);
+    }
+
+    variant ffi-type {
+        primitive(primitive-type),
+        struct(struct-type),
     }
 
     // FFI type definitions etc.
@@ -77,11 +92,26 @@ interface dll {
 
     resource function {
         /// Constructs a function from an opaque `alloc` and a type signature
-        constructor(alloc: alloc, args: list<ffi-type>, ret: option<ffi-type>);
+        /// Fails if type of `alloc` is not `ffi-type::primitive(primitive-type::pointer)`
+        from-alloc: static func(alloc: alloc, args: list<ffi-type>, ret: option<ffi-type>) -> result<function>;
 
+        /// Calls a function with specified arguments
+        /// Fails if argument types do not match function type signature
         call: func(args: list<outgoing-value>) -> result<option<incoming-value>>;
+
+        /// Returns a function as an opaque `alloc` of `ffi-type::primitive(primitive-type::pointer)` type
+        get-alloc: func() -> alloc;
     }
 
+    resource symbol {
+        /// Returns symbol as a typed `function`
+        get-function: func(args: list<ffi-type>, ret: option<ffi-type>) -> function;
+
+        /// Returns symbol as a typed `alloc`
+        get-alloc: func(ty: ffi-type) -> alloc;
+    }
+
+    /// `library::open` flags passed to `dlopen` by the host
     flags open-flags {
         lazy,
         now,
@@ -90,9 +120,12 @@ interface dll {
     }
 
     resource library {
+        /// Opens a library using `dlopen`
         open: static func(name: option<string>, flag: open-flags) -> result<library, string>;
+        // TODO: Add default() and next() ?
 
-        get: func(name: string) -> result<alloc, string>;
+        /// Gets a symbol from a library using `dlsym`
+        get: func(name: string) -> result<symbol, string>;
     }
 
     extension: func() -> string;
@@ -119,7 +152,7 @@ let lib = dll::Library::open(
 .expect("failed to open library");
 
 let sym = lib.get("hello").expect("failed to get `hello` symbol");
-let func = sym.function(vec![], Some(FfiType::Primitive(PrimitiveType::Pointer)));
+let func = sym.get_function(vec![], Some(FfiType::Primitive(PrimitiveType::Pointer)));
 
 let res = func
     .call(vec![])
@@ -147,7 +180,7 @@ This allows components to integrate with majority of existing software libraries
 
 ### PoC
 
-For a PoC of [wasi-dl] implemented via [libffi] in `wasmtime` see https://github.com/rvolosatovs/wasmtime/commit/c7f23e4133db93deb16779f597b2447648372365
+For a PoC of [wasi-dl] implemented via [libffi] in `wasmtime` see https://github.com/rvolosatovs/wasmtime/commit/6a098448f10bfadfd8f0778cdc0215e3d91f6ed2
 
 ## RPC-based plugins
 
