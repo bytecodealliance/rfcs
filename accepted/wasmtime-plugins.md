@@ -76,11 +76,10 @@ interface dll {
     use ffi.{alloc, ffi-type, outgoing-value, incoming-value};
 
     resource function {
-        call: func(args: list<outgoing-value>) -> result<option<incoming-value>>;
-    }
+        /// Constructs a function from an opaque `alloc` and a type signature
+        constructor(alloc: alloc, args: list<ffi-type>, ret: option<ffi-type>);
 
-    resource symbol {
-        function: func(args: list<ffi-type>, ret: option<ffi-type>) -> function;
+        call: func(args: list<outgoing-value>) -> result<option<incoming-value>>;
     }
 
     flags open-flags {
@@ -93,7 +92,7 @@ interface dll {
     resource library {
         open: static func(name: option<string>, flag: open-flags) -> result<library, string>;
 
-        get: func(name: string) -> result<symbol, string>;
+        get: func(name: string) -> result<alloc, string>;
     }
 
     extension: func() -> string;
