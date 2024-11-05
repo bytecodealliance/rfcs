@@ -134,7 +134,7 @@ A couple items to note for `wit-component` and `wit-parser`:
       u32) -> stream<u8>`, the import `[future-new-0]foo` would indicate a call
       to `future.new` for the type `future<u32>`.  Likewise, `[future-new-1]foo`
       would indicate a call to `future.new` for `future<future<u32>>`, and
-      `[stream-new-2]` would indicate a call to `stream.new` for `stream<u8>`.
+      `[stream-new-2]foo` would indicate a call to `stream.new` for `stream<u8>`.
 
 ## `wit-bindgen`
 
