@@ -162,3 +162,9 @@ time.
 
 - What is the exact process by which release automation does a "dry run" every
   so often? And how frequently is "every so often"?
+
+- Supporting a release for 20 versions is, as of now, probably a little
+  ambitious. Should we include wording saying that this is sort of a "trial run"
+  and we reserve the right to decrease the support window? Should we start with
+  something smaller like supporting for 12 months first and then reevaluate in
+  the future if it's worth widening to 20?
