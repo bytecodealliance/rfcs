@@ -81,6 +81,9 @@ LTS releases for Wasmtime will have the following properties:
   will be reviewed to backport a bug fix. Bug fixes are required to land on
   `main` first, however.
 * New features are not supported on LTS releases, even if someone sends a PR.
+* Backports are required to not increase the minimum-supported-Rust-version
+  (MSRV) from when the LTS branch was created. This means that the same version
+  of Rust can be used to compile an LTS branch for its entire lifecycle.
 
 LTS releases will be automated the same way all releases are managed for
 Wasmtime today. A dedicated `release-N.0.0` branch is created and then further
