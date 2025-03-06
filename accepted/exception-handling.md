@@ -171,8 +171,7 @@ Second, we propose two new CLIF instructions:
        tags for an entry in the `ir::ExceptionTable`, then control is
        transferred to the entry's associated `exn_label` block,
        passing the exception payload and any associated
-       `exn_args...`. (Note that this exceptional control transfer may
-       happen multiple times in a two-phase exceptions scenario.)
+       `exn_args...`.
     2. Otherwise, unwinding continues past this function's frame and
        control is not transferred to either the `ok_label` or the
        `exn_label`.
@@ -198,11 +197,34 @@ exception. Instead, exception throwing must be done indirectly via an
 imported function (e.g. a Wasmtime builtin libcall implemented in the
 host/engine).
 
-We do not hard-wire in support for two-phase exceptions. Though, it
-should be possible to encode two-phase exceptions on top of the
-proposed constructs. For example, the producer can emit some prelude
-code that runs in the beginning of each landing pad to determine
-whether the runtime is in the search phase or unwind phase.
+Furthermore, we do not define `try_return_call[_indirect]`
+instructions. When you tail call out of a function, that function is
+no longer on the stack to catch any exceptions unwinding the stack.
+
+Signatures do not need to be annotated with whether they can raise
+exceptions and, if so, which exceptions they raise. A regular
+`call[_indirect]` that unwinds due to an exception will simply
+continue unwinding over its frame. One only needs to use `try_call`
+(and pay for the additional register spills) when one is catching an
+exception, not for every call that might raise an exception.
+
+We also do not define a `throw` or `raise` instruction. It is assumed
+that all exceptions will be thrown by calling out to runtime routines
+that invoke the unwinder directly. Thus, all CLIF instructions where
+an exception could be propagated are variants of `call`
+instructions. That, in turn, means that our `try_call[_indirect]`
+instructions are sufficient to enumerate all exceptional control
+edges.
+
+We do not define support for two-phase exceptions (as [used by
+C++](https://nicolasbrailo.github.io/blog/2013/0326_Cexceptionsunderthehood8twophasehandling.html))
+where landing pads can be resumed multiple times. It should be
+possible to extend these features for two-phase exceptions if need be
+in the future, however, it is not necessary for our current goal of
+implementing Wasm exceptions. Multiple resumption adds a number of
+complications, including the need to preserve stack slots for future
+resumptions, which would require extensive auditing and reworking of
+Cranelift and `regalloc2`.
 
 ## Potential Implementation Strategies
 
