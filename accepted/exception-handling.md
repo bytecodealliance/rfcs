@@ -72,9 +72,13 @@ exception handling proposal in Wasmtime.
   host frames would require implementing a full DWARF unwinder or
   equivalent. It also seems like it would be exceedingly likely to
   introduce complicated bugs and likely trigger undefined behavior in
-  our Rust code as well.
+  our Rust code as well. Additionally, our stack might be interleaved
+  with frames from other JIT runtimes, say .NET, that might not use
+  DWARF and which we will never be able to safely unwind past. Or C
+  code that is compiled without unwind info and without frame
+  pointers, etc...
 
-  Note: this just not preclude throwing and catching exceptions when
+  Note: this does not preclude throwing and catching exceptions when
   there is a host frame present in the call stack, as we can catch and
   rethrow exceptions in trampolines on the boundary.
 
