@@ -44,23 +44,25 @@ exception handling proposal in Wasmtime.
   [#3256](https://github.com/bytecodealliance/wasmtime/issues/3256),
   [#7997](https://github.com/bytecodealliance/wasmtime/issues/7997)).
 
-* **Fast unwinding strategy.** We require unwinding to be fast enough
-  to support [the guest
+* **Fast unwinding strategy.** Beyond the general desire for a fast
+  unwinding implementation to make raising exceptions as fast as
+  possible, we additionally require that the stack-walking half of
+  unwinding to be fast enough to support [Wasmtime's guest
   profiler](https://docs.wasmtime.dev/examples-profiling-guest.html). Thus,
   it is important that the chosen implementation strategy does not box
-  ourselves into a corner. Though, we consider it acceptable if the
+  ourselves into a corner. That said, we consider it acceptable if the
   minimal viable product (MVP) of the implementation does not achieve
-  peak performance for unwinding as long as there is a viable path to
-  improving the performance.
+  peak performance as long as we retain a viable path to getting
+  there.
 
-* **Compatibility with standard formats.** Regardless of unwinding
-  strategy, Wasmtime must continue to work with system profilers which
-  suport DWARF or frame pointers, e.g. `perf`. Furthermore, in
-  Cranelift `cg_clif` should be extended with capabilities to leverage
-  the unwind info support to emit appropriate DWARF, Windows
-  Structured Exception Handling, and so forth. Though, we believe a
-  MVP capable of recovering the `vmctx` register should suffice for
-  critical use-cases.
+* **Compatibility with standard formats.** Regardless of the exact
+  unwinding strategy it uses internally, Wasmtime must continue to
+  work with external system profilers which leverage DWARF or frame
+  pointers, e.g. `perf`. Furthermore, while Cranelift may not emit
+  `.eh_frame` sections directly, it should be possible that `cg_clif`
+  be extended to translate the unwind data structures that Cranelift
+  does generate into `.eh_frame` so that it can integrate with the
+  system unwinder when implementing Rust's panics.
 
 # Non-requirements
 [non-requirements]: #non-requirements
@@ -216,22 +218,19 @@ instructions. That, in turn, means that our `try_call[_indirect]`
 instructions are sufficient to enumerate all exceptional control
 edges.
 
-We do not define support for two-phase exceptions (as [used by
-C++](https://nicolasbrailo.github.io/blog/2013/0326_Cexceptionsunderthehood8twophasehandling.html))
-where landing pads can be resumed multiple times. It should be
-possible to extend these features for two-phase exceptions if need be
-in the future, however, it is not necessary for our current goal of
-implementing Wasm exceptions. Multiple resumption adds a number of
-complications, including the need to preserve stack slots for future
-resumptions, which would require extensive auditing and reworking of
-Cranelift and `regalloc2`.
+We do not hardcode in support for two-phase exceptions (as [used by
+C++](https://nicolasbrailo.github.io/blog/2013/0326_Cexceptionsunderthehood8twophasehandling.html),
+for example). It should, however, be possible to build on top of this
+system, so long as the first phase (the search phase) happens inside
+the unwinder runtime, and Cranelift's emitted landing pads are only
+ever executed once.
 
 ## Potential Implementation Strategies
 
-There are at least three feasible implementation strategies for stack
+There are at least two feasible implementation strategies for stack
 unwinding.
 
-1. Side table: we can store information about which parts of the code
+1. **Side table**: we can store information about which parts of the code
    can raise exceptions and where their respective handlers are
    located.
 
@@ -247,7 +246,7 @@ unwinding.
    needs to correctly emit unwind tables and the runtime needs to
    correctly interpret the tables during unwinding.
 
-2. Calling convention: we can extend the calling convention to
+2. **Calling convention**: we can extend the calling convention to
    propagate exception information between function calls, for example
    in a dedicated register (riscv64) or a particular flags bit
    (aarch64, x86\_64, and I think s390x). If that register is non-zero
@@ -259,27 +258,26 @@ unwinding.
    when the program never throws an exception.
 
    Correctness does not involve any coordination between distant
-   components (such as the runtime's interpretation of unwind tables),
-   since the compiler can emit everything necessary for correctness
-   inline.
+   components (such as the runtime's interpretation of unwind tables
+   and the compiler) since the compiler can emit everything necessary
+   for correctness inline.
 
 Because the calling-convention approach imposes overhead on the
 non-exceptional path, we could never turn Wasm exceptions on by
-default in Wasmtime using this approach. That means that we would need
-to support two different calling conventions (with- and without
-exceptions) for every target indefinitely. And these calling
-conventions wouldn't just have a different set of caller-
-vs. callee-saved registers or argument and return value passing
-locations; they would have all this extra
+default in Wasmtime using it. That means that we would need to support
+two different calling conventions (with- and without exceptions) for
+every target indefinitely. And these calling conventions wouldn't just
+have a different set of caller- vs. callee-saved registers or argument
+and return value passing locations; they would have all this extra
 check-for-and-branch-on-exception code to maintain. We consider this
 scenario a non-starter. Furthermore, it doesn't make sense to use the
 calling-convention approach as an incremental milestone on the way to
 a side-table implementation, since the side-table implementation would
 not build on top of the calling-convention implementation and would
-only throw away work we previously did. We could, instead, have
-dedicated that effort towards implementing the side-table approach in
-the first place. Therefore, **we will implement the side-table
-approach** and we will do so right from the beginning.
+only throw away work we previously did. We could have, instead,
+dedicated that effort towards implementing the final side-table
+approach in the first place. Therefore, **we will implement the
+side-table approach** and we will do so right from the beginning.
 
 We are now left with the question of whether to use side table option
 (a) a DWARF subset or (b) a bespoke format. Let's start with some
@@ -376,7 +374,7 @@ some programs "must" be compiled with exceptions due to accidental
 complexity with (say) their build system, but won't ever actually
 raise any exceptions due to the configuration of various knobs. With
 this mode, Wasmtime can run these programs and do so without the
-`.cwasm` binary bloat associatred with the exceptions' side tables or
+`.cwasm` binary bloat associated with the exceptions' side tables or
 the save-all-registers execution overhead of `try_call`.
 
 Finally, it is worth noting that this mode is not visible to Wasm
