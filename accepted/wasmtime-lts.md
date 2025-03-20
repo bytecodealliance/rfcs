@@ -3,9 +3,9 @@
 [summary]: #summary
 
 Add a Long Term Support (LTS) channel of releases for Wasmtime. LTS releases for
-Wasmtime will be every 10 versions at versions `N0.0.0`. LTS releases are
-supported for 15 releases to ensure that there is always at least two LTSes at
-any one point in time.
+Wasmtime will be every 12 versions at versions starting at 24.0.0. LTS releases
+are supported for 24 releases (2 years) to ensure that there is always at least
+two LTSes at any one point in time.
 
 # Motivation
 [motivation]: #motivation
@@ -84,12 +84,13 @@ source project with critical security requirements.
 [proposal]: #proposal
 
 Wasmtime will add a new type of release to its release process, a Long Term
-Support (LTS) release. LTS releases will happen every 10th release of Wasmtime,
-starting with 30.0.0. Each LTS will be supported for 15 versions, or 15 months.
-Overlapping LTS windows enables users of the LTS release to upgrade on their
-own time from one LTS to another. At this time though it's expected that users
-will always upgrade from one LTS to another, for example a user of 30.0.0 could
-upgrade to 40.0.0 as late as when 45.0.0 is released.
+Support (LTS) release. LTS releases will happen every 12th release of Wasmtime
+(once a year), starting with 24.0.0 (retroactively classified as LTS). Each LTS
+will be supported for 24 versions, or 24 months/2 years. Overlapping LTS
+windows enables users of the LTS release to upgrade on their own time from one
+LTS to another. At this time though it's expected that LTS users will likely
+upgrade from one LTS to another, for example a user of 36.0.0 could upgrade to
+48.0.0 as late as when 52.0.0 is released.
 
 LTS releases for Wasmtime will have the following properties:
 
@@ -112,12 +113,12 @@ LTS releases will be automated the same way all releases are managed for
 Wasmtime today. A dedicated `release-N.0.0` branch is created and then further
 releases are made from that branch. Subsequent releases of LTSes for CVEs or bug
 fixes will be versioned by incrementing the patch version of semver, for example
-30.0.1. A patch release is made via [today's release process][patches]
+36.0.1. A patch release is made via [today's release process][patches]
 
 Wasmtime will continue to guarantee security fixes and support bug fix backports
 for the current release of Wasmtime and the previous release of Wasmtime as
-well. For example if the current release is 43.0.0 then a CVE will trigger a
-release of 30.0.1, 40.0.1, 42.0.1, and 43.0.1.
+well. For example if the current release is 47.0.0 then a CVE will trigger a
+release of 24.0.1 (lts), 36.0.1 (lts), 46.0.1 (n-1), and 47.0.1 (n).
 
 To see this proposal visually this is a diagram of when a release starts (the
 start of its box) to the final date such a release receives security fixes (the
@@ -125,21 +126,22 @@ end of its box)
 
 ```mermaid
 gantt
-    title A Gantt Diagram
+    title LTS Schedule
     dateFormat  YYYY-MM-DD
     section lts1
-    30.0.0           :a1, 2025-02-20, 450d
+    24.0.0           :a1, 2024-08-20, 720d
+    30.0.0           :a1, 2025-02-20, 60d
     31.0.0           :a2, 2025-03-20, 60d
     32.0.0           :a2, 2025-04-20, 60d
     33.0.0           :a2, 2025-05-20, 60d
     34.0.0           :a2, 2025-06-20, 60d
     35.0.0           :a2, 2025-07-20, 60d
-    36.0.0           :a2, 2025-08-20, 60d
+    section lts2
+    36.0.0           :a2, 2025-08-20, 720d
     37.0.0           :a2, 2025-09-20, 60d
     38.0.0           :a2, 2025-10-20, 60d
     39.0.0           :a2, 2025-11-20, 60d
-    section lts2
-    40.0.0           :a1, 2025-12-20, 450d
+    40.0.0           :a1, 2025-12-20, 60d
     41.0.0           :a2, 2026-01-20, 60d
     42.0.0           :a2, 2026-02-20, 60d
     43.0.0           :a2, 2026-03-20, 60d
@@ -147,17 +149,26 @@ gantt
     45.0.0           :a2, 2026-05-20, 60d
     46.0.0           :a2, 2026-06-20, 60d
     47.0.0           :a2, 2026-07-20, 60d
-    48.0.0           :a2, 2026-08-20, 60d
-    49.0.0           :a2, 2026-09-20, 60d
     section lts3
-    50.0.0           :a1, 2026-10-20, 450d
+    48.0.0           :a2, 2026-08-20, 720d
+    49.0.0           :a2, 2026-09-20, 60d
+    50.0.0           :a1, 2026-10-20, 60d
 ```
 
-This means that once two LTS channels are in play there will be anywhere from 3
-to 4 releases of Wasmtime which receive security fixes at any one point in
-time.
+This means that once two LTS channels are in play there will 4 releases of
+Wasmtime which receive security fixes at any one point in time.
 
 [patches]: https://docs.wasmtime.dev/contributing-release-process.html#releasing-a-patch-version
+
+## Schedule Constraints
+
+There are a number of possibilities around how exactly to set the parameters for
+LTS. Here it's chosen that an LTS happens once-a-year at versions divisible
+by 12. Versions are then supported for 24 months. This cadence is specifically
+chosen to enable users to update Wasmtime once per year and always be on a
+supported LTS version. This is seen as a good rule of thumb we can give
+embedders where they get to choose when during the year to upgrade so long as
+one upgrade happens per year.
 
 ## LTS and CI
 
@@ -238,18 +249,7 @@ branch.
   takes an unexpectedly long time then if a security issue happens it won't get
   backported to the old LTS release.
 
-* There's always the possibility of supporting more LTS releases or supporting
-  them for longer. The two-release and ten-versions-apart are relatively
-  arbitrary at this time. Putting LTS releases 10 versions apart just makes them
-  easy to identify (30, 40, 50, ...). While some overlap is required (e.g at
-  least 11 months of support) it's not necessarily required to have 20 months of
-  support. For now though it's predicted this won't be too onerous to support.
-
 # Open questions
 [open-questions]: #open-questions
 
-- Supporting a release for 15 versions may, as of now, possibly be a little
-  ambitious. Should we include wording saying that this is sort of a "trial
-  run" and we reserve the right to decrease the support window? Should we start
-  with something smaller like supporting for 12 months first and then
-  reevaluate in the future if it's worth widening to 20?
+None at this time.
