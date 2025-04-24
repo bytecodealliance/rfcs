@@ -152,28 +152,23 @@ Second, we propose two new CLIF instructions:
    * `args...` match `func`'s parameter types.
    * `ok_label` and every `exn_label` must name blocks in this
      function.
-   * The block parameters of `ok_label`'s block must match the
-     concatenation of `func`'s return types followed by
+   * The block parameters of `ok_label`'s block must match
      `ok_args...`.
-   * The block parameters of every `exn_label` must match the
-     concatenation of a pointer-sized integer (which is the exception
-     payload, defined by the runtime) followed by its associated
+   * The block parameters of every `exn_label` must match its associated
      `exn_args...`.
 
   The semantics are as follows:
 
   * The `func` function is invoked, passing `args...` as
     arguments.
-  * When the invocation returns normally, control is transferred to
-    the block named by `ok_label`, passing first the call's return
-    values and then the `ok_args...`  values.
+  * When the invocation returns normally, control is transferred to the block
+    named by `ok_label`, passing the `ok_args...` as block arguments.
   * When the invocation is unwound due to an exception, there are two
     sub-cases to consider:
-    1. If the runtime determines that the exception matches one of the
-       tags for an entry in the `ir::ExceptionTable`, then control is
-       transferred to the entry's associated `exn_label` block,
-       passing the exception payload and any associated
-       `exn_args...`.
+    1. If the runtime determines that the exception matches one of the tags for
+       an entry in the `ir::ExceptionTable`, then control is transferred to the
+       entry's associated `exn_label` block, passing the associated
+       `exn_args...` as block arguments.
     2. Otherwise, unwinding continues past this function's frame and
        control is not transferred to either the `ok_label` or the
        `exn_label`.
@@ -188,6 +183,26 @@ Second, we propose two new CLIF instructions:
    `try_call` but instead of taking a static `ir::FuncRef`, it takes a
    function signature immediate and dynamic function address operand
    value.
+
+Additionally, the argument to a block call is extended from being just an
+`ir::Value` to being an `enum` of either
+
+* an `ir::Value`,
+* the `i`th return of the block call's associated `try_call[_indirect]`
+instruction (for normal return paths),
+* or the `i`th exception payload value of the block call's associated
+  `try_call[_indirect]` (for exceptional return paths).
+
+This allows accessing a `try_call[_indirect]`'s normal and exceptional values
+*only* from within the control-flow path where those values are defined. It
+prevents an exception's landing pad from attempting to use the function's normal
+return values, for example. The normal return values and exception payload
+values are logically defined *on the control-flow edge*, so making them
+accessible only within the `try_call[_indirect]` instruction's edges to other
+blocks matches those semantics. The `try_call[_indirect]` instruction cannot
+define these values itself, for example, because then the defs for both normal
+return values and exceptional payload values would dominate -- and therefore be
+"usable" from -- both the normal and exceptional successor blocks.
 
 These new instructions have many immediates and operands. Likely more
 than will naively fit in an `ir::InstructionData`. We leave the exact
