@@ -306,7 +306,8 @@ observations:
 
 * Again, at least for the foreseeable moment, we can make
   `try_call[_indirect]` instructions use a variant of the target's
-  Wasm calling convention where all registers are caller-saved.
+  Wasm calling convention where all registers are caller-saved in our
+  internal `tail` calling convention.
 
 When taken together, these observations mean that our exception side
 tables *only* need to encode a map from a `try_call`'s return address
