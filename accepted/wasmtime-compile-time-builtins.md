@@ -94,22 +94,15 @@ important that we evaluate them:
 2. **Implementation Burden:** How much new code will we need to implement? How
    hard will it be to maintain?
 
-3. **Risk of Enabling Standards Circumvention:** While none of these
-   alternatives deviate from Wasm semantics, there does exist the potential risk
-   of making this new functionality powerful enough that it can be used as a
-   vector for circumventing standard Wasm. We do not want to entice developers
-   to target their whole applications to compile-time builtins, rather than
-   standard Wasm itself, so as to gain access to privileged intrinsics.
-
 More details on each approach will follow, but for the purpose of quickly
 reviewing their tradeoffs, I've summarized our three alternatives along these
 additional dimensions in the following table:
 
-| Candidate Solution | API Burden | Implementation Burden | Risk of Enabling Standards Circumvention |
-|---|---|---|---|
-| Expose CLIF | ⭐★★★★ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐★ |
-| Mini-Language | ⭐⭐⭐⭐⭐ |  ⭐⭐⭐★★ | ⭐⭐⭐⭐⭐ |
-| Self-hosted Wasm | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐★★★★ through ⭐⭐⭐⭐⭐ ? |
+| Candidate Solution | API Burden | Implementation Burden |
+|---|---|---|
+| Expose CLIF | ⭐★★★★ | ⭐⭐⭐⭐⭐ |
+| Mini-Language | ⭐⭐⭐⭐⭐ |  ⭐⭐⭐★★ |
+| Self-hosted Wasm | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
 
 ## 1. Expose CLIF in Wasmtime's Public API
 
@@ -144,13 +137,9 @@ As far as implementation burden goes, however, this is very straightforward. We
 already have the types and methods, we just re-export them, and expose hooks for
 getting instances of them at the correct times.
 
-The risk of enabling standards circumvention seems relatively low, since writing
-whole programs with `cranelift_frontend::FunctionBuilder` would be unpleasant,
-to say the least.
-
-Finally, it does not seem possible to support Winch with this approach. Maybe
-that is okay, since if you care about runtime speed, you should be using
-Cranelift anyways.
+Finally, it does not seem possible to support Winch with this approach. That is
+not ideal but ultimately deemed okay, since if you really care about runtime
+speed, you should be using Cranelift anyways.
 
 ## 2. Define a New Mini-Language
 
@@ -182,10 +171,6 @@ The implementation burden is slightly higher, but not too bad, since we need to
 actually implement the mini-language and translate it into CLIF or Winch API
 calls.
 
-The risk of enabling standards circumvention is very low: we define this
-mini-language and we can, again, simply avoid making it powerful enough to
-target for whole applications.
-
 > Note: I have a working, proof-of-concept prototype of this approach in [my
 > `compile-time-builtins-mini-language`
 > branch](https://github.com/bytecodealliance/wasmtime/compare/main...fitzgen:wasmtime:compile-time-builtins-mini-language). For
@@ -211,18 +196,11 @@ let mut code_builder = wasmtime::CodeBuilder::new();
 
 // ...
 
-code_builder.define_compile_time_builtins(
+code_builder.define_compile_time_component_instance(
     "foo",
     r#"
-        (module
-            (import "__wasmtime_intrinsics" "i32.load_native" (func (param i64) (result i32)))
-            (import "__wasmtime_intrinsics" "i32.store_native" (func (param i64) (result i32)))
-
+        (component
             ;; ...
-
-            (func (export "bar") (param i32 i32) (result i32)
-                (i32.add (local.get 0) (local.get 1))
-            )
         )
     "#,
 )?;
@@ -235,36 +213,19 @@ methods.
 The maintenance burden is also minimal: we must already parse and generate code
 for Wasm.
 
-Unfortunately, the risk of enabling standards circumvention is quite high if we
-are not careful. If we implemented this approach naively, we could accidentally
-create a "Wasm prime" target that is just Wasm but with non-standard extensions
-for escaping the sandbox and ambiently accessing capabilities. That said, if we
-put some restrictions on the shape of the Wasm that implements a compile-time
-builtin, for example what state it can define and imports it can access, then I
-think we can reduce this risk (more on this later).
-
-The final benefit that this approach brings is that it is potentially a stepping
-stone towards general Wasm function inlining in Wasmtime.[^wasm-inlining]
-
-[^wasm-inlining]: Generally, a Wasm module was produced by LLVM and potentially
-    optimized by `wasm-opt`, and all of the opportunities for beneficial
-    inlining have already been taken. That is no longer true in a components
-    world, where we are linking multiple core Wasm modules together, each of
-    which were compiled independently, and can now see which exports are wired
-    up to which imports.
-
 # Proposal
 
 As for how to define compile-time builtins, this RFC proposes that we move
 forward with the Wasm self-hosting approach.
 
-First, we add a `wasmtime::CodeBuilder::define_compile_time_builtins` method:
+First, we add a `wasmtime::CodeBuilder::define_compile_time_component_instance`
+method:
 
 ```rust
 impl CodeBuilder {
-    pub unsafe fn define_compile_time_builtins(
+    pub unsafe fn define_compile_time_component_instance(
         &mut self,
-        namespace: &str,
+        name: &str,
         self_hosted_wasm: &[u8],
     ) -> Result<&mut Self> {
         // ...
@@ -272,86 +233,105 @@ impl CodeBuilder {
 }
 ```
 
-`self_hosted_wasm` is a Wasm binary (or WAT if the `"wat"` cargo feature is
-enabled). We validate that it fits within the restrictions we impose upon
-self-hosted Wasm.
+This is the compile-time equivalent of
+[`wasmtime::component::Linker::instance`](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Linker.html#method.instance).
 
-Upon successful return, if the code that the `CodeBuilder` is building imports
-from `namespace` a function with the name of one of `self_hosted_wasm`'s
-exports, then we will do the following:
+`self_hosted_wasm` is a Wasm component binary (or WAT if the `"wat"` cargo
+feature is enabled). We validate it and propagate any errors.
 
-* Validate that the import and export type signatures match
-* Erase that import from the builder's resulting `Module` or `Component`
-* Inline the body of the builtin function at all call sites
+If the user component that the code builder is compiling imports an instance named
+`name`, then we will do the following:
 
-Note that we still have to define a standalone function inside the compiled
-artifact for each compile-time builtin that gets used just in case it is ever
-`ref.func`ed or re-exported.
+* Remove the import of `name`
+* Make it so that the user component effectively contains an inline `(component
+  ...)` definition of the compile-time component
+* Extend the user component's imports with the compile-time component's imports
+* Make it so that the user component's execution begins by instantiating the
+  compile-time component, forwarding imports to the compile-time component
+* Use the compile-time component's instance wherever the imported `name`
+  instance was used
+
+Additionally, the compile-time component will be allow-listed access to Wasmtime
+intrinsics and may import these functions. Intrinsic imports will not be
+forwarded to the user component, unlike other imports, and will instead have
+their associated operation directly inlined during compilation. Giving access to
+these intrinsics is also why the method is `unsafe`: callers are promising that
+the self-hosted Wasm is well-behaved, trusted code and that it will not misuse
+the intrinsics to access invalid memory, cause data races, touch Wasmtime's
+internal data structures, or etc...
+
+Finally, note that when [Wasmtime's support for function
+inlining](https://github.com/bytecodealliance/wasmtime/pull/11283) is enabled,
+the compile-time component's functions (and any associated adapters we generate)
+can be inlined into callers, removing all function call overheads.
 
 ## Restrictions on Self-Hosted Wasm
 
-Self-hosted Wasm that is defining compile-time builtins will not be allowed to
-define any additional state:
+There are no restrictions on the shape of self-hosted Wasm components. They may
+define multiple core Wasm modules that in turn define multiple memories,
+globals, and tables. Their functions (including imported intrinsic functions)
+may be `ref.func`ed. Anything that normal Wasm can do, self-hosted Wasm can also
+do.
 
-* No memories
-* No globals
-* No tables
-
-Compile-time builtins will not (at least initially, see open questions) be able
-to import anything other than functions from the `__wasmtime_intrinsics`
-namespace nor to make any function calls, other than to those imported
-intrinsics.
-
-`ref.func`ing or re-exporting imported intrinsics is not allowed.
-
-These constraints should retain the flexibility needed to implement simple
-getters and setters inline while also preventing this environment from being
-something that general applications can target (which would risk enabling the
-circumvention of standard Wasm).
-
-We will need to implement a validation pass (or validate as we inline) that
-checks these properties.
+As an incremental milestone, however, the "MVP" implementation of self-hosted
+Wasm might not support all these operations in their entirety.
 
 ## Intrinsics
 
 This is a list of the intrinsics that will be available for compile-time
-builtins under the `__wasmtime_intrinsics` import namespace. Calls to intrinsics
-do not become actual function calls, they are replaced with a handful of native
-instructions.
+components as an instance with the name `__wasmtime_intrinsics`. Calls to
+intrinsics do not become actual function calls, they are replaced with a handful
+of native instructions.
 
-First up are load and store operations for the native address space. The
-`pointer` type is either an `i32` or `i64` depending on the target's pointer
-width. The `native` mnemonic means that the memory operation is operating on the
-native memory address space, not a particular Wasm memory, and uses native
-endianness. The `_s` and `_u` mnemonics have the same meaning as in core Wasm:
-they specify whether the value is signed- or unsigned extended. The `8` and `16`
-suffixes also have the same meaning as in core Wasm: only store the bottom N
-bits of the value to memory.
+Most intrinsics are various load and store operations for the native address
+space. The pointer type is always a `u64`, but its high 32 bits are ignored on
+32-bit systems. This allows writing compile-time builtins that are portable
+across builds targeting different ISAs. If we required the use of `u32` on
+32-bit ISAs, then compile-time builtin authors would need to maintain both a 32-
+and 64-bit variant of their builtins. The `native` mnemonic hints that the
+memory operation is operating on the native memory address space, not a
+particular Wasm memory, and uses native endianness.
 
-* `i8.native_load_s: [pointer] -> [i32]`
-* `i8.native_load_u: [pointer] -> [i32]`
-* `i16.native_load_s: [pointer] -> [i32]`
-* `i16.native_load_u: [pointer] -> [i32]`
-* `i32.native_load: [pointer] -> [i32]`
-* `i64.native_load: [pointer] -> [i64]`
-* `i32.native_store8: [pointer i32] -> []`
-* `i32.native_store16: [pointer i32] -> []`
-* `i32.native_store: [pointer i32] -> []`
-* `i64.native_store: [pointer i64] -> []`
+The final intrinsic, `resource.address`, gives the address of the host data in
+the resource table for a particular resource handle. It will raise a trap on
+invalid resources and out-of-bounds resource table accesses.
 
-Next, we have an intrinsic for getting the address of the host data in the
-resource table for a particular `i32` resource handle. It will raise a trap on
-out-of-bounds resource table accesses.
+```wat
+(import "__wasmtime_intrinsics"
+  (instance
+    (export "u8.native_load" (func (param "address" u64) (result u8)))
+    (export "u16.native_load" (func (param "address" u64) (result u16)))
+    (export "u32.native_load" (func (param "address" u64) (result u32)))
+    (export "u64.native_load" (func (param "address" u64) (result u64)))
 
-* `resource.address: [i32] -> [pointer]`
+    (export "i8.native_load" (func (param "address" u64) (result i8)))
+    (export "i16.native_load" (func (param "address" u64) (result i16)))
+    (export "i32.native_load" (func (param "address" u64) (result i32)))
+    (export "i64.native_load" (func (param "address" u64) (result i64)))
+
+    (export "u8.native_store" (func (param "address" u64) (param "value" u8)))
+    (export "u16.native_store" (func (param "address" u64) (param "value" u16)))
+    (export "u32.native_store" (func (param "address" u64) (param "value" u32)))
+    (export "u64.native_store" (func (param "address" u64) (param "value" u64)))
+
+    (export "i8.native_store" (func (param "address" u64) (param "value" i8)))
+    (export "i16.native_store" (func (param "address" u64) (param "value" i16)))
+    (export "i32.native_store" (func (param "address" u64) (param "value" i32)))
+    (export "i64.native_store" (func (param "address" u64) (param "value" i64)))
+
+    ;; Note: this signature is not actually valid, see open questions.
+    (export "resource.address" (func (param "resource" (borrow (sub resource))) (result u64)))
+  )
+)
+```
 
 Note that we do *not* define intrinsics for directly accessing or addressing the
 `vmctx`, any linear memories, or any other internal state of the Wasm
 instance. While Wasmtime needs those abilities to implement operations like
-`global.get`, compile-time builtins do not get to see inside Wasmtime's
-implementation details. They are only given helpers for accessing things that
-the embedder themselves defined, such as the elements inside a resource
-table.[^blah]
+`global.get` and `memory.size`, compile-time builtins do not get to see inside
+Wasmtime's implementation details. They are only given helpers for accessing
+data that the embedder themselves defined, such as the host object backing a
+Wasm resource.[^blah]
 
 [^blah]: Of course, although they should only ever access embedder-defined data
     as part of their safety contract, compile-time builtins ultimately have the
@@ -360,40 +340,61 @@ table.[^blah]
     need to add more footguns than we fundamentally must.
 
 While we needn't implement all of these intrinsics from the very start, we
-should in the fullness of time implement all of them.
+should in the fullness of time implement all of them. In the process of
+implementing compile-time builtins, we may also recognize oversights in the
+above list and add additional intrinsics or change existing ones.
+
+## Compile-time core modules?
+
+The above proposal only defines a mechanism for defining compile-time Wasm
+*components* not *core modules*. There is no reason we cannot add a
+`wasmtime::CodeBuilder::define_compile_time_module_instance` method for
+compile-time core module instance. It is simply excluded from this RFC because
+our current use cases all use component interfaces. Once the above proposal for
+compile-time components is implemented, it should be relatively straightforward
+to reuse that infrastructure for core modules, and we can discuss that
+possibility at that future point in time.
+
+## Winch and compile-time builtins?
+
+There was originally some question around whether it even made sense to allow
+compile-time builtins with Winch, since Winch will not inline calls to these
+compile-time builtins, defeating most of their motivation. However, satisfying a
+Wasm's imports at compile time, making it so that they need not be provided at
+instantiation time, is still valuable for Winch users. Furthermore, nothing laid
+out in the above proposal is fundamentally incompatible with Winch, or relies on
+anything specific to any of our Wasm compilers. The only compiler-specific piece
+is the implementation of each of the Wasmtime intrinsics' stubs, and these are
+isolated and should be relatively straightforward to implement. Therefore, while
+we might skip Winch support in an initial "MVP" implementation, there is no
+reason not to support compile-time builtins with Winch in the fullness of time.
 
 # Open questions
 [open-questions]: #open-questions
 
-* Is there some other approach to defining compile-time builtins for inlining
-  that I am failing to identify and which is better than anything proposed here?
+* **How do we specify which resource type's table we want to access in the
+  `resource.address` intrinsic?**
 
-* How do we specify which resource table we want to access in the
-  `resource.address` intrinsic? Do we need separate mechanisms for defining core
-  and component compile-time builtins, where component builtins are self-hosted
-  components and core builtins are self-hosted core modules?
+  The `resource.address` signature above is not actually valid: the component
+  model's interface types do not provide a way to define a function that takes
+  *any* resource, regardless of where or when it was defined, as an
+  argument. And in fact, if I remember correctly, we use different index spaces
+  for different types of resources, so resource index `r` could be valid in
+  multiple different resource tables.
 
-* Should we even support defining compile-time builtins with Winch at all? Or
-  should it always make the function calls at runtime, since if you wanted to
-  prioritize runtime speed you'd be using Cranelift anyways?
+  This intrinsic kind of wants to be a canonical builtin (like `resource.drop`
+  or `future.new`) rather than a regular function, so we can provide a resource
+  type as an immediate to disambiguate between different types of resources. But
+  defining new canonical builtins is entering the realm of extending the Wasm
+  language, rather than just providing powerful imports to certain components,
+  and I don't think we should go down that route.
 
-* Should we allow self-hosted Wasm to import and call non-intrinsic functions?
+  I suppose we could provide the type index of the resource type as a dynamic
+  argument -- in practice it should always be a constant so we can figure out
+  which resource table to access at compile time. But if it is not a constant,
+  what do we even do? Call out to the host? The whole point of this feature is
+  to avoid such calls... Perhaps this isn't so bad, and it just becomes another
+  array indirection: index into the array of resource tables, then index into
+  the array of table elements?
 
-  This would allow implementing fast paths inline, but with out-of-line
-  fallbacks for slow paths. Imagine a resource that represents a host `Vec<u8>`:
-  the path for `push`ing when there is capacity can all be done inline, but
-  still call out to a host function when there isn't capacity and the vec must
-  be resized. This raises all sorts of design questions though:
-
-  * How do we define and validate what functions are available to a compile-time
-    builtin at compile time? Do they have to be a subset of the core module's
-    imports?
-  * How do we define these slow-path functions in a `Linker`, or in
-    `Instance::new`, such that they are only accessible to the compile-time
-    builtin and not the rest of the module?
-  * Or does this case not erase the import at compile time, but instead only
-    actually end up calling the import if the inline code failed to "satisfy"
-    the call?
-
-  I think this is something we will want eventually, but I'd like to get
-  something basic working first before tackling this more-complicated use case.
+  Anyone have any other ideas?
