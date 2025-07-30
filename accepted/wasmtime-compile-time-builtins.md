@@ -292,9 +292,14 @@ and 64-bit variant of their builtins. The `native` mnemonic hints that the
 memory operation is operating on the native memory address space, not a
 particular Wasm memory, and uses native endianness.
 
-The final intrinsic, `resource.address`, gives the address of the host data in
-the resource table for a particular resource handle. It will raise a trap on
-invalid resources and out-of-bounds resource table accesses.
+The final intrinsic, `store.data_address`, gives a `*mut T` pointer containing
+the address of the `T` host data in the `wasmtime::Store<T>`. As long as
+embedders ensure that their `T` type is `#[repr(C)]`, then their compile-time
+builtins can use this intrinsic to access it inline. This allows embedders to,
+for example, keep a table of host buffers in their `wasmtime::Store<T>` data and
+define compile-time builtins that expose those buffers as component model
+resources, with methods to load from and store to those buffers implemented with
+inline intrinsics, avoiding function call overheads.
 
 ```wat
 (import "__wasmtime_intrinsics"
@@ -319,8 +324,7 @@ invalid resources and out-of-bounds resource table accesses.
     (export "i32.native_store" (func (param "address" u64) (param "value" i32)))
     (export "i64.native_store" (func (param "address" u64) (param "value" i64)))
 
-    ;; Note: this signature is not actually valid, see open questions.
-    (export "resource.address" (func (param "resource" (borrow (sub resource))) (result u64)))
+    (export "store.data_address" (func (result u64)))
   )
 )
 ```
@@ -372,29 +376,4 @@ reason not to support compile-time builtins with Winch in the fullness of time.
 # Open questions
 [open-questions]: #open-questions
 
-* **How do we specify which resource type's table we want to access in the
-  `resource.address` intrinsic?**
-
-  The `resource.address` signature above is not actually valid: the component
-  model's interface types do not provide a way to define a function that takes
-  *any* resource, regardless of where or when it was defined, as an
-  argument. And in fact, if I remember correctly, we use different index spaces
-  for different types of resources, so resource index `r` could be valid in
-  multiple different resource tables.
-
-  This intrinsic kind of wants to be a canonical builtin (like `resource.drop`
-  or `future.new`) rather than a regular function, so we can provide a resource
-  type as an immediate to disambiguate between different types of resources. But
-  defining new canonical builtins is entering the realm of extending the Wasm
-  language, rather than just providing powerful imports to certain components,
-  and I don't think we should go down that route.
-
-  I suppose we could provide the type index of the resource type as a dynamic
-  argument -- in practice it should always be a constant so we can figure out
-  which resource table to access at compile time. But if it is not a constant,
-  what do we even do? Call out to the host? The whole point of this feature is
-  to avoid such calls... Perhaps this isn't so bad, and it just becomes another
-  array indirection: index into the array of resource tables, then index into
-  the array of table elements?
-
-  Anyone have any other ideas?
+(None)
