@@ -53,9 +53,7 @@ Additionally, note that the definition of compile-time builtins is pretty
 fundamentally `unsafe`: you are interacting with the guts of Wasm code
 generation and promising things like "I pinky swear that accessing this host
 memory at this pointer is equivalent to what my native host function would have
-otherwise done". Similarly, because these compile-time builtins must have the
-ability to load from and store to native memory, they cannot be portable across
-ISAs with different pointer widths.
+otherwise done".
 
 It is worth noting that our goals here are not new or unique; there is plenty of
 prior art. Even beyond the js-string-builtins proposal, Web browsers have been
