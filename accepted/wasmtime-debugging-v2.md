@@ -459,7 +459,7 @@ we don't need to "reverse-engineer" Cranelift's frame layout in any
 way, or ensure any special properties about which values are live
 across time or updated when restoring a snapshot. Rather, the
 Wasm-as-implemented-in-lowered-machine-code state is an opaque blob
-that we mempcy out, and memcpy back in, and all continues as we had
+that we memcpy out, and memcpy back in, and all continues as we had
 left off.
 
 In particular, the snapshot procedure is:
