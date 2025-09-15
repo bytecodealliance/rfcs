@@ -290,6 +290,24 @@ of *other* SSA values across step/OSR-points and regenerate them as
 needed. This RFC will not explore the topic further, but it does
 perhaps add some additional value to the generic mechanism.
 
+### Interactions with Optimizer
+
+It is important to note that a significant advantage of this scheme is
+that the stores to update state, together with breakpoint-opcodes as
+sequence points that form compiler barriers (below), *depend only on
+correct semantics-preserving compilation* to get fully precise state
+out of the machine code. In other words, we do not need to
+reverse-engineer the compiler's output in the debugger, or carefully
+limit ourselves from implementing certain kinds of optimizations or
+transforms. Rather, because the compiler *must* always preserve
+side-effects and their ordering, we get debug correctness for free:
+updates to debug state, and step-poitns at which the state can be
+observed, are first-class IR side-effects that a correct compiler will
+preserve. Cranelift may even optimize the entire user program away (in
+the read-only breakpoint mode at least), leaving only updates to debug
+state at each step -- and that is fine, because we will still observe
+debug state in the correct order with respect to the original program!
+
 ## Breakpoints
 
 The original debugging RFC proposes to implement breakpoints as follows:
@@ -307,19 +325,32 @@ cache-coherence and other code-publishing overheads, and unwanted
 interference across separate instances of one module.) This RFC
 instead proposes, again, an inline instrumentation-based approach.
 
-In brief, the `vmctx` for any particular instance will store a pointer
-to a bitmap, with one bit per original Wasm opcode. At each "check for
-breakpoint" point, we will emit a load, mask, compare and branch. On
-the cold path at the branch destination, we perform the hostcall into
-the runtime that returns control to the debugger.
+In brief, we retain a "check for breakpoint" pseudo-opcode, lowered as
+a sequence point (opaque to the compiler, inhibits moving
+side-effects) and with some actual breakpoint logic as the lowering.
+We could implement either an "explicit checks" breakpoint mode or a
+dynamic-patching breakpoint mode:
 
-This breakpoint-bitmap should have good cache residency as long as the
-code itself does (it will be much more dense than the machine code);
-and unlike fuel, these operations do not form long dependent chains,
-so in code that is not otherwise maximizing the instruction-issue
-bandwidth of a modern out-of-order CPU, these checks should not have
-prohibitive performance overhead. In any case, it will be much less
-than an unconditional hostcall at every step.
+- In the explicit-checks mode, The `vmctx` for any particular instance
+  will store a pointer to a bitmap, with one bit per original Wasm
+  opcode. At each "check for breakpoint" point, we will emit a load,
+  mask, compare and branch. On the cold path at the branch
+  destination, we perform the hostcall into the runtime that returns
+  control to the debugger.
+  
+- In the dynamic-patching mode, we lower the check-for-breakpoint
+  opcode as a NOP region large enough for patching in a call to a
+  break trampoline. Critically, we do the patching on a *private copy*
+  of the code segment. This should be possible to do reasonably
+  cheaply because Wasmtime already must emit completely
+  position-independent code (it has no support for load-time
+  relocations in compiled artifact text segments); it only means
+  adjusting function pointers placed into VM structures when
+  initializing instances if an instance has a private copy of the
+  module's code.
+
+We plan to experiment with both, and choose the option that is as
+simple as possible without imposing undue run-time or code-size bloat.
 
 ## Async Nature of Breakpoints
 
@@ -416,6 +447,13 @@ have significantly lower overhead than the currently-accepted plan of
 a full hostcall on every store. We can also easily implement this
 logic in host-side accessors, if desired.
 
+If the 1-for-1 shadow memory approach is too expensive in memory
+utilization for some use-cases, we may explore alternatives that use a
+two-level scheme, where there is a dense map (fast constant-time
+accesses) with a bit per larger granularity (e.g., page or cache
+line), and a sparse hashmap of actual watchpoints that is checked in a
+slow-path.
+
 ## Snapshots and Wasm Stacks
 
 As part of our exploration of record/replay execution and eventual
@@ -493,21 +531,29 @@ plans.
 
 The general simplifying assumption behind the design is that we record
 *an entire store*, and trace all interactions across the store
-boundary so that we can replay them. The key choice that makes this
-tracing feasible is that we focus on recording *Wasm components*,
-which by specification must not export their memory; shared-memory
-interactions are the bane of any tracing scheme, and this approach
-manages the complexity by instead hooking the explicit
-canonical-ABI-specified writes of structured data into the component's
-linear memory.
+boundary so that we can replay them. 
+
+The most challenging (from a performance point of view) kind of
+interaction to trace is an update to Wasm memory from the host side:
+for example, as a response to a hostcall requesting an IO read into a
+guest buffer. Semantically this is straightforward: we augment the
+APIs that provide slices of guest memory to the host code so that they
+record which areas of memory become "dirty" (if granted mutable
+access). This could become expensive if the host code is careless and
+takes a slice of the entire memory, however. One aspect of our
+approach that eases this cost, and makes it more likely that traces
+will be compact and "precise" (recording only what is necessary to
+reproduce the run), is interaction with the *Wasm component model* and
+its *canonical ABI*, which specifies exactly which memory addresses a
+hostcall may mutate.
 
 The prototype linked above provides trace and replay modes via
 Wasmtime's `Config`, but requires the host to initiate calls and other
-interactions with the store; calls from the component back *out* to
-the host are recorded and replayed. In the final form, we plan to
-record *both* directions, i.e., the host's calls into Wasm (recording
-the arguments to calls), and the Wasm's calls back to the host
-(recording the return values from calls). We will then provide two new
+interactions with the store; calls from the guest back *out* to the
+host are recorded and replayed. In the final form, we plan to record
+*both* directions, i.e., the host's calls into Wasm (recording the
+arguments to calls), and the Wasm's calls back to the host (recording
+the return values from calls). We will then provide two new
 abstractions at the host API level: a `Trace`, which is analogous to a
 `Module` as a static entity that can be executed, and a `Replay`,
 which is analogous to an `Instance` as one dynamic execution of a
