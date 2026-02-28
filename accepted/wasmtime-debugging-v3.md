@@ -158,7 +158,7 @@ as debug providers, in the vision of the original RFC, but without the
 One could then implement any number of top halves in this world:
 
 - A gdbstub provider, listening on a TCP socket (via `wasi-sockets`);
-- A DAP provider, listening on a TCP socket or HTTP endpoing (via
+- A DAP provider, listening on a TCP socket or HTTP endpoint (via
   `wasi-http`);
 - A text-mode REPL or a TUI providing a direct machine-monitor
   debugging experience, similar to old-school `DEBUG.COM`;
