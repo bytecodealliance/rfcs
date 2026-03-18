@@ -446,7 +446,7 @@ functions are exported.  The following is a sketch of the API exported by the
 hypothetical lowered component we presented in the previous section.
 
 Again, all of the following constants, types, and functions are (eventually)
-intended to match the imports a C binding generator would generate per the
+intended to match the exports a C binding generator would generate per the
 proposed [Guest C ABI](https://github.com/WebAssembly/component-model/pull/378).
 
 ```c
@@ -534,7 +534,7 @@ task_status_t example_package_foo_bar_callback(
 
 This tool takes as input a WIT world and produces source code for a given target
 language which may be used to define component-level host functions, instantiate
-`lower-component`-produced modules, and invoke its exports, etc.  It also
+`lower-component`-produced modules, and invoke their exports, etc.  It also
 includes a runtime library containing reusable code for e.g. tracking waitables,
 managing host<->guest stream and future I/O, etc.
 
@@ -544,11 +544,11 @@ either case, the generated code and runtime library would bottom out in calls to
 the embedding C API described in the next section.
 
 Alternatively, the functionality of `host-wit-bindgen`-generated code could be
-provided by a library providing a general-purpose, dynamic API for creating
-component values, defining host functions, and calling functions.  This would be
-useful in scenarios where the shape of the component is not known ahead of time,
-and/or the target language is already so dynamic that code generation is
-redundant.
+provided entirely by the runtime library, which could include a general-purpose,
+dynamic API for creating component values, defining host functions, and calling
+exports.  This would be useful in scenarios where the shape of the component is
+not known ahead of time, and/or the target language is already so dynamic that
+code generation is redundant.
 
 ## Host C API for Embedder Bindings
 
@@ -705,7 +705,7 @@ typedef struct {
 // - `store`: The store in which the fiber will be created
 // - `context`: Application-defined state to be passed to `func`
 // - `func`: Function to call when the fiber is resumed for the first time
-fiber_t fiber_new(store_t store, void *context, void (*func)(void*));
+fiber_t fiber_new(store_t store, void *context, void (*func)(void *));
 
 // Passes control to the specified fiber.
 //
