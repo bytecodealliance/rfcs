@@ -243,11 +243,6 @@ typedef struct {
   uint32_t payload;
 } wait_result_t;
 
-#define COPY_RESULT_BLOCKED 0xFFFFFFFF
-#define COPY_RESULT_COMPLETED 0
-#define COPY_RESULT_DROPPED 1
-#define COPY_RESULT_CANCELLED 2
-
 // Blocks the calling fiber until the specified `waitable-set` has an event.
 //
 // - `set`: The `waitable-set` to wait for
@@ -289,6 +284,11 @@ writer_reader_pair_t stream_import_example_package_foo_thing_new();
 // Returns the (writer, reader) pair.
 __attribute__((__import_module__("env"), __import_name__("[stream<export example:package/foo#thing>.new]")))
 writer_reader_pair_t stream_export_example_package_foo_thing_new();
+
+#define COPY_RESULT_BLOCKED 0xFFFFFFFF
+#define COPY_RESULT_COMPLETED 0
+#define COPY_RESULT_DROPPED 1
+#define COPY_RESULT_CANCELLED 2
 
 // Represents the result of a stream read or write.
 //
