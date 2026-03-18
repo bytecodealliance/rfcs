@@ -236,7 +236,7 @@ uint32_t waitable_join(uint32_t waitable, uint32_t set);
 // Note that we use a currently-hypothetical `__multivalue_return__` attribute
 // here to indicate that functions returning this type should compile to a core
 // Wasm type of e.g. `(func ... (result i32 i32 i32))`.
-__attribute((__multivalue_return__))
+__attribute__((__multivalue_return__))
 typedef struct {
   uint32_t event;
   uint32_t waitable;
@@ -261,7 +261,7 @@ __attribute__((__import_module__("env"), __import_name__("[waitable-set.poll]"))
 wait_result_t waitable_set_poll(uint32_t set);
 
 // Represents the write- and read-ends of a `stream` or `future`.
-__attribute((__multivalue_return__))
+__attribute__((__multivalue_return__))
 typedef struct {
   uint32_t writer;
   uint32_t reader;
@@ -294,7 +294,7 @@ writer_reader_pair_t stream_export_example_package_foo_thing_new();
 //
 // - `result`: One of the `COPY_RESULT_*` constants defined above
 // - `count`: The number of items copied, if any
-__attribute((__multivalue_return__))
+__attribute__((__multivalue_return__))
 typedef struct {
   uint32_t result;
   size_t count;
@@ -413,7 +413,7 @@ void import_example_package_foo_thing_drop(uint32_t handle);
 //
 // - `status`: One of the `TASK_STATUS_*` constants defined above
 // - `task`: The host-defined identifier for the task, if `status < 2`
-__attribute((__multivalue_return__))
+__attribute__((__multivalue_return__))
 typedef struct {
   uint32_t status;
   uint32_t task;
@@ -498,7 +498,7 @@ void example_package_foo_thing_dtor(uint32_t handle);
 //
 // - `code`: One of the `CALLBACK_CODE_*` constants defined above
 // - `waitable_set`: The `waitable-set` on which to wait if `code == CALLBACK_CODE_WAIT`
-__attribute((__multivalue_return__))
+__attribute__((__multivalue_return__))
 typedef struct {
   uint32_t code;
   uint32_t waitable_set;
