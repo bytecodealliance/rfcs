@@ -235,7 +235,7 @@ uint32_t waitable_join(uint32_t waitable, uint32_t set);
 //
 // Note that we use a currently-hypothetical `__multivalue_return__` attribute
 // here to indicate that functions returning this type should compile to a core
-// Wasm type of e.g. `(func ... (result i32 i32))`.
+// Wasm type of e.g. `(func ... (result i32 i32 i32))`.
 __attribute((__multivalue_return__))
 typedef struct {
   uint32_t event;
