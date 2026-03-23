@@ -730,6 +730,21 @@ of hindsight.  In any case, a runtime-agnostic implementation would be useful as
 a temporary polyfill for use in a given runtime until a native implementation is
 complete.
 
+Another strategy would be to _not_ provide a `lower-component` tool and instead
+make `host-wit-bindgen` and its runtime library entirely responsible for
+implementing the component model in terms of the `Host C API for Embedder
+Bindings` described above.  In that scenario, the `host-wit-bindgen`-generated
+code would expect a component as input rather than a lowered module, generating
+fused adapters, type checks, marshalling guest<->guest calls, etc.  The main
+advantage of this approach is that it avoids the additional guest memory needed
+by the `lower-component`-generated module for use by the component runtime (to
+manage resource tables, etc.).  It also side-steps the question of how to deal
+with multiply-instantiated modules, since there's no lowering needed until
+runtime.  The main disadvantage is that it increases the amount of host code
+needed and thus the size of the TCB, although that could be mitigated by
+ensuring the generated code and runtime library use a memory- and type-safe
+language, e.g. Rust with no `unsafe` code.
+
 ## Prior art
 
 There are already a few projects which polyfill the component model:
