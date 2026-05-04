@@ -39,7 +39,7 @@ of drawbacks to this model of threading, shared with the web, such as:
 
 * The [wasi-threads] proposal is fundamentally incompatible with the component
   model due to component model intrinsics not having semantics across threads
-  (e.g. they all specifically assume single-threaded semantics and execution).c
+  (e.g. they all specifically assume single-threaded semantics and execution).
 
 * The [wasi-threads] proposal has fundamental open questions around topics such
   as thread lifecycle and TLS destructors which have no known answers at this
@@ -66,10 +66,10 @@ Additionally there is a clear path forward to integrating
 such.
 
 Current spec-level effort for multithreading in WebAssembly is primarily focused
-on the [shared-everything-proposal]. The instance-per-thread model on the web
-works as an "any means necessary" method of achieving parallelism, but languages
-and toolchains have had difficulty integrating well with this model given its
-severe limitations.
+on the [shared-everything-threads] proposal. The instance-per-thread model on
+the web works as an "any means necessary" method of achieving parallelism, but
+languages and toolchains have had difficulty integrating well with this model
+given its severe limitations.
 
 The downside of the [shared-everything-threads] proposal, however, is that it is
 likely years away from being ready. Much of the current effort around it is
@@ -109,7 +109,7 @@ Nowadays, however, `wasi-common` is not used by default and instead the
 crate has a fundamentally different design than the `wasi-common` crate,
 primarily motivated with integration with the component model. This includes
 features such as `async` which WASIp1 does not support. The `wasi-common` crate
-is only used by the `wasmtime` CLI when the `-Stherads` flag is passed, which
+is only used by the `wasmtime` CLI when the `-Sthreads` flag is passed, which
 enables [wasi-threads]. This is because the `wasmtime-wasi` crate is not
 compatible with [wasi-threads] and thus `wasi-common` is the only means of
 calling WASIp1 APIs when threads are in use.
@@ -159,7 +159,7 @@ further development. All future development is expected to go behind
 problems of [wasi-threads] and enable integration with the component model, for
 example. While [shared-everything-threads] is not expected to be done for a
 number of years, in the meantime the WASIp3 cooperative threading implementation
-will suffice or applications that "just need threads" to be ported to
+will suffice for applications that "just need threads" to be ported to
 WebAssembly.
 
 The `wasi-common` crate is a large, legacy crate in Wasmtime's codebase which
